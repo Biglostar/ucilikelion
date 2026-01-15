@@ -33,11 +33,13 @@ model Goal {
   user            User     @relation(fields: [userId], references: [id])
   
   category        String   // "Cafe", "Transport", "Shopping"
-  monthly_budget  Decimal
-  current_spent   Decimal  @default(0)
+  monthly_budget  Decimal  // The limit set by AI/User
+  current_spent   Decimal  @default(0) // Updates automatically as they spend
+
+  status          String   // "ACTIVE", "INACTIVE", "FAILED", "SUCCESS"
   
   // This tracks the last warning sent so we don't spam them
-  last_alert_threshold Int @default(0) // 0, 25, 75, 100
+  last_alert_threshold Int @default(0) // 0, 25, 50, 75, 100
   
   start_date      DateTime
   end_date        DateTime
