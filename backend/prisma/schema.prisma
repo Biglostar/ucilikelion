@@ -1,0 +1,60 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  nickname    String
+  roast_level String   @default("MILD") // "MILD", "SPICY", "EXTRA_SPICY"
+  
+  // Relations
+  goals        Goal[]
+  transactions Transaction[]
+  
+  created_at DateTime @default(now())
+}
+
+model Goal {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  category        String   // "Cafe", "Transport", "Shopping"
+  monthly_budget  Decimal  // The limit set by AI/User
+  current_spent   Decimal  @default(0) // Updates automatically as they spend
+
+  status          String   // "ACTIVE", "INACTIVE", "FAILED", "SUCCESS"
+  
+  // This tracks the last warning sent so we don't spam them
+  last_alert_threshold Int @default(0) // 0, 25, 50, 75, 100
+  
+  start_date      DateTime
+  end_date        DateTime
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  
+  amount      Decimal
+  category    String
+  store_name  String
+  date        DateTime
+  
+  // To track if this specific transaction triggered a roast
+  triggered_roast Boolean @default(false)
+}
