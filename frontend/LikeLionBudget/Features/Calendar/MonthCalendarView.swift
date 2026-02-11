@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-// Date는 Identifiable이 아니라 sheet(item:)에 못 씀 → 래퍼
 struct SelectedDay: Identifiable {
     let id = UUID()
     let date: Date
@@ -20,124 +19,126 @@ struct MonthCalendarView: View {
     @State private var selectedDay: SelectedDay? = nil
 
     private let weekdaySymbols = ["일", "월", "화", "수", "목", "금", "토"]
+    private var grid: [Date?] { daysInGrid() }
 
-    private var grid: [Date?] {
-        daysInGrid()
-    }
-
+    // MARK: Body
     var body: some View {
         VStack(spacing: 10) {
-            header
 
-            HStack {
-                ForEach(weekdaySymbols, id: \.self) { day in
-                    Text(day)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
+            VStack(spacing: 10) {
+                header
+
+                HStack {
+                    ForEach(weekdaySymbols, id: \.self) { day in
+                        Text(day)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.weekdaySimbol)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
-            }
-            .padding(.horizontal, 4)
+                .padding(.horizontal, 4)
 
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible()), count: 7),
-                spacing: 10
-            ) {
-                ForEach(Array(grid.enumerated()), id: \.offset) { _, dateOpt in
-                    if let date = dateOpt {
-                        DayCellView(
-                            date: date,
-                            netCents: netCents(for: date),
-                            isSelected: isSelected(date)
-                        )
-                        .onTapGesture {
-                            selectedDay = SelectedDay(date: date)
+                // MARK: - Grid
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible()), count: 7),
+                    spacing: 10
+                ) {
+                    ForEach(Array(grid.enumerated()), id: \.offset) { _, dateOpt in
+                        if let date = dateOpt {
+                            DayCellView(
+                                date: date,
+                                netCents: netCents(for: date),
+                                isSelected: isSelected(date)
+                            )
+                            .onTapGesture {
+                                selectedDay = SelectedDay(date: date)
+                            }
+                        } else {
+                            Color.clear.frame(height: 42)
                         }
-                    } else {
-                        Color.clear.frame(height: 42)
                     }
                 }
             }
-            .padding(12)
-            .background(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(Color.black.opacity(0.08))
             )
         }
+
+        // MARK: - Day detail sheet
         .sheet(item: $selectedDay) { item in
-            DayDetailSheet(date: item.date, store: store)
-                .presentationDetents([.fraction(0.85), .large])
+            DayDetailSheetContainer(date: item.date, store: store)
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+                .presentationBackground(.white)
         }
     }
 
     // MARK: - Header
-
     private var header: some View {
-        HStack {
-            Button {
-                month = MockData.usCalendar
-                    .date(byAdding: .month, value: -1, to: month) ?? month
-            } label: {
+        HStack(spacing: 10) {
+
+            Button { stepMonth(-1) } label: {
                 Image(systemName: "chevron.left")
+                    .font(.headline)
+                    .foregroundStyle(Theme.rose)
             }
 
             Spacer()
 
             Text(monthTitle(month))
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color(hex: "#000000"))
 
             Spacer()
 
-            Button {
-                month = MockData.usCalendar
-                    .date(byAdding: .month, value: 1, to: month) ?? month
-            } label: {
+            Button { stepMonth(1) } label: {
                 Image(systemName: "chevron.right")
+                    .font(.headline)
+                    .foregroundStyle(Theme.rose)
             }
         }
-        .foregroundStyle(Color.green)
-        .padding(.horizontal, 6)
     }
-
+    // MARK: - Title helper
     private func monthTitle(_ date: Date) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "yyyy년 M월"
+        f.locale = Locale(identifier: "en_US")
+        f.dateFormat = "MMMM yyyy"
         return f.string(from: date)
     }
 
-    // MARK: - Grid data
+    // MARK: - Month step
+    private func stepMonth(_ delta: Int) {
+        let cal = MockData.usCalendar
+        month = cal.date(byAdding: .month, value: delta, to: month) ?? month
+    }
 
+    // MARK: - Grid data
     private func daysInGrid() -> [Date?] {
         let cal = MockData.usCalendar
         let start = MockData.startOfMonth(month)
 
         let weekday = cal.component(.weekday, from: start)
-        let leadingBlanks = weekday - 1
-        let blanks: [Date?] = Array(repeating: nil, count: leadingBlanks)
+        let leading = weekday - 1
+        var result: [Date?] = Array(repeating: nil, count: leading)
 
         let range = cal.range(of: .day, in: .month, for: start) ?? 1..<31
-        let numberOfDays = range.count
-
-        let days: [Date?] = (0..<numberOfDays).compactMap { offset in
-            cal.date(byAdding: .day, value: offset, to: start)
+        for offset in 0..<range.count {
+            result.append(cal.date(byAdding: .day, value: offset, to: start))
         }
 
-        var result = blanks + days
-        if result.count < 42 {
-            result.append(contentsOf: Array(repeating: nil, count: 42 - result.count))
-        }
-        if result.count > 42 {
-            result = Array(result.prefix(42))
+        let remainder = result.count % 7
+        if remainder != 0 {
+            result.append(contentsOf: Array(repeating: nil, count: 7 - remainder))
         }
         return result
     }
 
     // MARK: - Helpers
-
     private func netCents(for date: Date) -> Int {
         store.netCents(on: date)
     }
@@ -145,5 +146,26 @@ struct MonthCalendarView: View {
     private func isSelected(_ date: Date) -> Bool {
         guard let selected = selectedDay?.date else { return false }
         return MockData.usCalendar.isDate(selected, inSameDayAs: date)
+    }
+}
+
+// MARK: - DayDetailSheetContainer
+private struct DayDetailSheetContainer: View {
+    let date: Date
+    @ObservedObject var store: TransactionStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            DayDetailSheet(date: date, store: store)
+                .background(Color.white)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("뒤로") { dismiss() }
+                            .foregroundStyle(Theme.text)
+                    }
+                }
+        }
     }
 }

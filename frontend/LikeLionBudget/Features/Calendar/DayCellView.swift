@@ -20,10 +20,11 @@ struct DayCellView: View {
         VStack(spacing: 4) {
             Text("\(dayNumber(date))")
                 .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.black)
 
             Text(netText(netCents))
                 .font(.caption2)
-                .foregroundStyle(netCents >= 0 ? Color.blue : Color.red)
+                .foregroundStyle(netCents >= 0 ? Theme.plus : Theme.minus)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -37,9 +38,9 @@ struct DayCellView: View {
     }
 
     private var backgroundColor: Color {
-        if isSelected { return Color.green.opacity(0.22) }
-        if isToday { return Color.yellow.opacity(0.25) }
-        return Color.green.opacity(0.06)
+        // 거래 있는 날 배경색
+        if netCents != 0 { return Theme.beige }
+        return Color.clear
     }
 
     private var borderColor: Color {

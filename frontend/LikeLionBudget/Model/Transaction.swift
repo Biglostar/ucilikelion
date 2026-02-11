@@ -7,21 +7,23 @@
 
 import Foundation
 
-struct Transaction: Identifiable, Hashable {
+struct Transaction: Identifiable, Hashable, Codable {
     let id: UUID
-    let date: Date
-    let title: String
-    let amountCents: Int
-    let category: String
-    let merchant: String?
-    
+    var date: Date
+    var title: String
+    var amountCents: Int
+    var category: BudgetCategory
+    var merchant: String?
+    var isFixed: Bool
+
     init(
         id: UUID = UUID(),
         date: Date,
         title: String,
         amountCents: Int,
-        category: String,
-        merchant: String? = nil
+        category: BudgetCategory,
+        merchant: String? = nil,
+        isFixed: Bool = false
     ) {
         self.id = id
         self.date = date
@@ -29,5 +31,6 @@ struct Transaction: Identifiable, Hashable {
         self.amountCents = amountCents
         self.category = category
         self.merchant = merchant
+        self.isFixed = isFixed
     }
 }

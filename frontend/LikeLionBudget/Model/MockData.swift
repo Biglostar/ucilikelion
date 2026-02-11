@@ -12,13 +12,21 @@ enum MockData {
     static var usCalendar: Calendar {
         var cal = Calendar(identifier: .gregorian)
         cal.locale = Locale(identifier: "en_US")
-        cal.firstWeekday = 1 // Sunday
+        cal.firstWeekday = 1
         return cal
     }
 
     static func startOfMonth(_ date: Date) -> Date {
         let cal = usCalendar
         let comps = cal.dateComponents([.year, .month], from: date)
+        return cal.date(from: comps) ?? date
+    }
+
+    static func withTime(_ date: Date, hour: Int, minute: Int) -> Date {
+        let cal = usCalendar
+        var comps = cal.dateComponents([.year, .month, .day], from: date)
+        comps.hour = hour
+        comps.minute = minute
         return cal.date(from: comps) ?? date
     }
 
@@ -31,17 +39,11 @@ enum MockData {
             let day = cal.component(.day, from: date)
 
             let net: Int
-            if day == 1 {
-                net = 250000  // +$2,500.00
-            } else if day % 7 == 0 {
-                net = -6500   // -$65.00
-            } else if day % 3 == 0 {
-                net = -650    // -$6.50
-            } else if day % 5 == 0 {
-                net = -1899   // -$18.99
-            } else {
-                net = 0
-            }
+            if day == 1 { net = 250000 }
+            else if day % 7 == 0 { net = -6500 }
+            else if day % 3 == 0 { net = -650 }
+            else if day % 5 == 0 { net = -1899 }
+            else { net = 0 }
 
             return DaySummary(date: date, netCents: net)
         }
@@ -53,19 +55,19 @@ enum MockData {
 
         if day == 1 {
             return [
-                Transaction(date: date, title: "Zelle Payment", amountCents: 250000, category: "Income", merchant: nil),
-                Transaction(date: date, title: "Rent", amountCents: -180000, category: "Rent", merchant: nil),
-                Transaction(date: date, title: "Coffee", amountCents: -650, category: "Coffee", merchant: "Starbucks")
+                Transaction(date: withTime(date, hour: 9, minute: 12), title: "Zelle Payment", amountCents: 250000, category: .income, merchant: nil, isFixed: false),
+                Transaction(date: withTime(date, hour: 10, minute: 5), title: "Rent", amountCents: -180000, category: .rent, merchant: nil, isFixed: true),
+                Transaction(date: withTime(date, hour: 13, minute: 40), title: "Coffee", amountCents: -650, category: .cafe, merchant: "Starbucks", isFixed: false)
             ]
         } else if day % 7 == 0 {
             return [
-                Transaction(date: date, title: "Groceries", amountCents: -6500, category: "Groceries", merchant: "Trader Joe's"),
-                Transaction(date: date, title: "Gas", amountCents: -4200, category: "Transport", merchant: "Chevron")
+                Transaction(date: withTime(date, hour: 11, minute: 20), title: "Groceries", amountCents: -6500, category: .grocery, merchant: "Trader Joe's", isFixed: false),
+                Transaction(date: withTime(date, hour: 18, minute: 10), title: "Gas", amountCents: -4200, category: .transportation, merchant: "Chevron", isFixed: false)
             ]
         } else {
             return [
-                Transaction(date: date, title: "Coffee", amountCents: -650, category: "Coffee", merchant: "Starbucks"),
-                Transaction(date: date, title: "In-N-Out", amountCents: -1899, category: "Food", merchant: "In-N-Out")
+                Transaction(date: withTime(date, hour: 8, minute: 55), title: "Coffee", amountCents: -650, category: .cafe, merchant: "Starbucks", isFixed: false),
+                Transaction(date: withTime(date, hour: 19, minute: 5), title: "Food", amountCents: -1899, category: .food, merchant: "In-N-Out", isFixed: false)
             ]
         }
     }
