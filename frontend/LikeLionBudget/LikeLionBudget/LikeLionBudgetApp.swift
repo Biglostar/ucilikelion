@@ -6,12 +6,13 @@
 //
 
 import SwiftUI
+import UIKit
 
 @main
 struct LikeLionBudgetApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootTabView()
         }
     }
 }
