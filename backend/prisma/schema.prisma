@@ -11,50 +11,102 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
+}
+
+enum RoastLevel {
+  MILD
+  MEDIUM
+  SPICY
+}
+
+enum GoalStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BudgetSource {
+  AUTO_AVG_3M
+  USER_SET
 }
 
 model User {
-  id          String   @id @default(uuid())
-  email       String   @unique
-  nickname    String
-  roast_level String   @default("MILD") // "MILD", "SPICY", "EXTRA_SPICY"
-  
-  // Relations
+  id         String     @id @default(uuid())
+  email      String     @unique
+  nickname   String
+  roastLevel RoastLevel @default(MILD)
+
   goals        Goal[]
   transactions Transaction[]
-  
-  created_at DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Goal {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id])
-  
-  category        String   // "Cafe", "Transport", "Shopping"
-  monthly_budget  Decimal  // The limit set by AI/User
-  current_spent   Decimal  @default(0) // Updates automatically as they spend
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  status          String   // "ACTIVE", "INACTIVE", "FAILED", "SUCCESS"
-  
-  // This tracks the last warning sent so we don't spam them
-  last_alert_threshold Int @default(0) // 0, 25, 50, 75, 100
-  
-  start_date      DateTime
-  end_date        DateTime
+  // add a goal
+  title String
+  memo  String? // optional로
+  icon  String? // "coffee", "bus"
+
+  // given category from Plaid and redefined category mapping needed
+  category String // 
+
+  monthlyBudgetCents Int
+  currentSpentCents  Int @default(0)
+
+  // dashboard
+  isSelected Boolean @default(false)
+
+  status GoalStatus @default(ACTIVE)
+
+  // 0/10/25/50/75/100
+  lastAlertPct Int @default(100)
+
+  budgetSource       BudgetSource @default(AUTO_AVG_3M)
+  baselineAvg3mCents Int?
+
+  startDate DateTime
+  endDate   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, category])
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
 }
 
 model Transaction {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  
-  amount      Decimal
-  category    String
-  store_name  String
-  date        DateTime
-  
-  // To track if this specific transaction triggered a roast
-  triggered_roast Boolean @default(false)
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plaidTxnId String? @unique
+  accountId  String? // Plaid account id (optional)
+
+  title       String // "Starbucks"", "Uber", "Salary"
+  amountCents Int // always > 0
+  type        TransactionType
+
+  category   String // "cafe", "transport", "grocery" 등
+  occurredAt DateTime
+
+  isFixed Boolean @default(false)
+  note    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, occurredAt])
+  @@index([userId, category])
 }
