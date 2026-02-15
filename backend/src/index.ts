@@ -4,11 +4,10 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
-import dashboardRoutes from './routes/dashboardRoutes';
 import goalRoutes from './routes/goalRoutes';
 import transactionRoutes from "./routes/transactionRoutes";
 import { generateNaggingMessage } from "./services/aiService";
-
+import dashboardRoutes from "./routes/dashboardRoutes";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,4 +36,4 @@ async function testDrive() {
   console.log("캐릭터 꼽 문구: ", message);
 }
 
-testDrive();
+// testDrive();

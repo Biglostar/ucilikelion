@@ -1,9 +1,8 @@
-import { Router } from 'express';
-// import { getDashboardStatus } from '../controllers/dashboardController';
+import { Router } from "express";
+import { getDashboardData } from "../controllers/dashboardController";
 
 const router = Router();
 
-// GET /api/dashboard/status
-// router.get('/status', getDashboardStatus);
+router.get("/", getDashboardData);
 
 export default router;
