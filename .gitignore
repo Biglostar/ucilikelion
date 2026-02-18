@@ -1,1 +1,22 @@
+# 의존성
+node_modules/
 
+# 빌드 결과물
+dist/
+build/
+*.so.node
+
+# 환경 변수
+.env
+.env.*
+
+# OS 관련 파일
+.DS_Store
+Thumbs.db
+
+# 로그 파일
+npm-debug.log*
+yarn-error.log*
+
+# 백업 및 임시 파일
+.vscode/
