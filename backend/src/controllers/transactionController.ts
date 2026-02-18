@@ -1,7 +1,15 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma";
-import { generateNaggingMessage } from "../services/aiService";
+import { generateNaggingMessage, generatePushNotification } from "../services/aiService";
 
+function getNaggingCheckpoint(lastAlertPct: number, remainingPct: number) {
+  const checkpoints = [100, 75, 50, 25, 10, 0];
+  // 사용자가 지출을 해서 remainingPct가 떨어질 때, 어떤 체크포인트를 돌파 했는지 체크
+  const crossed = checkpoints
+    .filter((cp) => remainingPct <= cp && lastAlertPct > cp)
+    .sort((a, b) => a - b)[0]; // 가장 먼저 만난거 선택
+  return crossed !== undefined ? crossed : null;
+}
 
 export async function getTransactions(req: Request, res: Response) {
   try {
@@ -37,17 +45,6 @@ export async function getTransactions(req: Request, res: Response) {
 }
 
 
-// 예산 초과시 (remainingPct < 0) null을 반환. 컨트롤러에서 처리
-function getNaggingCheckpoint(lastAlertPct: number, remainingPct: number) {
-  if (remainingPct < 0) return null;
-
-  const checkpoints = [75, 50, 25, 10, 0];
-  const crossed = checkpoints
-    .filter((cp) => cp >= remainingPct && cp < lastAlertPct)
-    .sort((a, b) => b - a)[0]; 
-  return crossed !== undefined ? crossed : null;
-}
-
 export async function createTransaction(req: Request, res: Response) {
   try {
     const userId = req.header("x-user-id");
@@ -62,7 +59,7 @@ export async function createTransaction(req: Request, res: Response) {
     const result = await prisma.$transaction(async (tx) => {
       // 1. Transaction 생성
       const transaction = await tx.transaction.create({
-        data: { userId, title, amountCents: amount, type, category, occurredAt: new Date(occurredAt), isFixed: isFixed ?? false, note },
+        data: { userId, title,amountCents: Number(amountCents), type, category, occurredAt: new Date(occurredAt), isFixed: isFixed ?? false, note },
       });
 
       if (type === "INCOME") {
@@ -79,33 +76,28 @@ export async function createTransaction(req: Request, res: Response) {
       if (!goal || !user) return { transaction, alert: { shouldNotify: false } };
 
       // 3. 예산 계산
-      const newSpent = goal.currentSpentCents + amount;
+      const newSpent = goal.currentSpentCents + transaction.amountCents;
       const remainingPct = ((goal.monthlyBudgetCents - newSpent) / goal.monthlyBudgetCents) * 100;
 
       // 4. 알림 트리거 확인
-      let shouldNotify = false;
-      let currentCheckpoint = getNaggingCheckpoint(goal.lastAlertPct, remainingPct);
-      let isOverBudget = newSpent > goal.monthlyBudgetCents;
+      const currentCheckpoint = getNaggingCheckpoint(goal.lastAlertPct, remainingPct);
+      const isOverBudget = newSpent > goal.monthlyBudgetCents;
+      const shouldNotify = isOverBudget || currentCheckpoint !== null;
 
       // 5. 캐릭터 상태 확인 (나중에 수정 필요))
-      let characterStatus: "RICH" | "NORMAL" | "POOR" = "NORMAL";
-      if (remainingPct > 50) {
-        characterStatus = "RICH";
-      } else if (remainingPct <= 10) {
-        characterStatus = "POOR";
-      }
-
-      // 예산 초과면 무조건 알림, 새로운 체크포인트 진입 시 알림
-      if (isOverBudget || currentCheckpoint !== null) {
-        shouldNotify = true;
-      }
+      let characterStatus: "RICH" | "STABLE" | "SURVIVING" | "DESPERATE" | "BROKE" = "RICH";
+        if (remainingPct > 75) characterStatus = "RICH";
+        else if (remainingPct > 50) characterStatus = "STABLE";
+        else if (remainingPct > 25) characterStatus = "SURVIVING";
+        else if (remainingPct > 0) characterStatus = "DESPERATE";
+        else characterStatus = "BROKE";
 
       // 6. AI 메시지 생성
       let naggingMessage = "";
       if (shouldNotify) {
-        // 예산 초과 시에는 0% 지점으로 간주하여 메시지 생성하도록
-        const displayPct = isOverBudget ? 0 : (currentCheckpoint ?? 0);
-        naggingMessage = await generateNaggingMessage(
+        // 푸쉬 알림용 퍼센트는 체크포인트 값 혹은 0 초과할때 사용
+        const displayPct = isOverBudget ? 0 : (currentCheckpoint ?? Math.floor(remainingPct));
+        naggingMessage = await generatePushNotification(
           goal.category,
           displayPct,
           user.roastLevel
@@ -118,7 +110,7 @@ export async function createTransaction(req: Request, res: Response) {
         where: { id: goal.id },
         data: {
           currentSpentCents: newSpent,
-          lastAlertPct: isOverBudget ? -1 : (shouldNotify ? (currentCheckpoint ?? goal.lastAlertPct) : goal.lastAlertPct)
+          lastAlertPct: isOverBudget ? -1 : (currentCheckpoint !== null ? currentCheckpoint : goal.lastAlertPct)
         }
       });
 
@@ -131,7 +123,7 @@ export async function createTransaction(req: Request, res: Response) {
           characterStatus
         }
       };
-    });
+    }, {timeout: 20000});
 
     return res.status(201).json(result);
   } catch (e) {
