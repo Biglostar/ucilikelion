@@ -10,7 +10,7 @@
     "start": "node dist/index.js"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "npx ts-node prisma/seed.ts" 
   },
   "keywords": [],
   "author": "",
