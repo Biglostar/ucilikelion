@@ -85,12 +85,19 @@ enum TransactionType {
   EXPENSE
 }
 
+enum TransactionSource {
+  MANUAL
+  PLAID
+}
+
 model Transaction {
   id String @id @default(uuid())
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  source TransactionSource @default(MANUAL)
+  
   plaidTxnId String? @unique
   accountId  String? // Plaid account id (optional)
 
