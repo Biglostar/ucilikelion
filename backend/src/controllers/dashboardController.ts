@@ -11,40 +11,45 @@ export async function getDashboardData(req: Request, res: Response) {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // 2. 유저 정보 & active goals, 이번 달 총 지출액 load
-    const [user, goals, totalSpentAggregation] = await Promise.all([
+    // 2. 지난 3개월 범위 계산 (예: 오늘이 2월이면, 11월 1일 ~ 1월 31일)
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+
+    const [user, goals, totalSpentAggregation, threeMonthStats] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId } }),
       prisma.goal.findMany({
         where: { userId, status: "ACTIVE" },
-        orderBy: { isSelected: "desc" } // 선택된 것이 가장 앞에 오도록 정렬
+        orderBy: { isSelected: "desc" }
       }),
+      // 이번 달 지출
+      prisma.transaction.aggregate({
+        where: { userId, type: "EXPENSE", occurredAt: { gte: startOfMonth } },
+        _sum: { amountCents: true }
+      }),
+      // 2. 지난 3개월 총 지출 집계
       prisma.transaction.aggregate({
         where: {
           userId,
           type: "EXPENSE",
-          occurredAt: { gte: startOfMonth }
+          occurredAt: { gte: threeMonthsAgo, lt: startOfMonth }
         },
         _sum: { amountCents: true }
       })
     ]);
 
-    if (!user || goals.length === 0) {
-      return res.json({ 
-        summary: { nickname: user?.nickname || "User", totalMonthSpentCents: 0 },
-        message: "목표를 먼저 설정해주세요!", 
-        activeGoals: [],
-        character: { status: "RICH", bubbleText: "목표를 설정하고 관리를 시작해볼까?" }
-      });
-    }
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // 3. 이번 달 예산 결정: 지난 3개월 총 지출 / 3
+    const totalThreeMonthSpent = threeMonthStats._sum.amountCents || 0;
+    const totalMonthlyBudget = Math.floor(totalThreeMonthSpent / 3); 
 
     const totalMonthSpent = totalSpentAggregation._sum.amountCents || 0;
     
-    // 월간 예산 합계 계산
-    const totalMonthlyBudget = goals.reduce((acc, g) => acc + g.monthlyBudgetCents, 0);
-    
-    // 월간 예산 남은 퍼센트 계산
+    // 나머지 계산 로직 (남은 퍼센트 등)
     const totalRemainingAmount = Math.max(0, totalMonthlyBudget - totalMonthSpent);
-    const totalRemainingPct = Math.min(100, Math.max(0, (totalRemainingAmount / totalMonthlyBudget) * 100));
+    // 예산이 0일 경우를 대비한 방어 코드
+    const totalRemainingPct = totalMonthlyBudget > 0 
+      ? Math.min(100, Math.max(0, (totalRemainingAmount / totalMonthlyBudget) * 100))
+      : 0;
 
     // 목표별 남은 예산과 퍼센트 계산
     const activeGoals = goals.map(goal => {
@@ -62,7 +67,7 @@ export async function getDashboardData(req: Request, res: Response) {
       };
     });
 
-    // 3. 캐릭터 상태 결정 (추후 상태 추가해서 수정)
+    // 4. 캐릭터 상태 결정 (추후 상태 추가해서 수정)
     let characterStatus: "RICH" | "STABLE" | "SURVIVING" | "DESPERATE" | "BROKE" = "RICH";
 
     if (totalRemainingPct > 75) characterStatus = "RICH";
@@ -71,7 +76,7 @@ export async function getDashboardData(req: Request, res: Response) {
     else if (totalRemainingPct > 0) characterStatus = "DESPERATE";
     else characterStatus = "BROKE";
 
-    // 4. AI 말풍선 생성
+    // 5. AI 말풍선 생성
     const bubbleText = await generateNaggingMessage(
       "monthly budget",
       Math.max(0, Math.floor(totalRemainingPct)),

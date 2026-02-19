@@ -81,3 +81,45 @@ export async function generatePushNotification(
     return "작작 좀 써! 벌써 예산 다 차간다. 💸"; 
   }
 }
+
+export async function generateAiBudgetAnalysis(
+  category: string,
+  monthlySummaries: { month: string; totalCents: number }[]
+) {
+  const averageCents = monthlySummaries.reduce((acc, cur) => acc + cur.totalCents, 0) / 3;
+
+  const prompt = `
+    System: You are a professional financial data analyst AI.
+    Task: Analyze the user's 3-month spending history for the '${category}' category and suggest a rational monthly budget.
+
+    User Spending Data (Last 3 Months):
+    ${monthlySummaries.map(s => `- ${s.month}: ${s.totalCents} USD`).join("\n")}
+    Arithmetic Average: ${averageCents / 100} USD
+
+    Instructions:
+    1. Evaluate the consistency and quality of the user's spending.
+    2. Recommend a "Suggested Budget" for the next month (integer). Do not just provide the average; adjust it based on spending trends.
+    3. Provide the output strictly in JSON format.
+
+    Output Format (Strict JSON):
+    {
+      "suggestedBudget": 500, 
+    }
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    let responseText = result.response.text();
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return { suggestedBudget: parsed.suggestedBudget };
+    }
+    
+    throw new Error("Invalid AI Response");
+  } catch (error) {
+    console.error("AI Analysis Error:", error);
+    return { suggestedBudget: Math.floor(averageCents) };
+  }
+}

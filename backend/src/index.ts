@@ -22,7 +22,6 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/goals', goalRoutes);
 
 app.use("/api/transactions", transactionRoutes);
-
 // Start Server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
