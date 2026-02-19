@@ -3,6 +3,11 @@ import { PrismaClient, RoastLevel, TransactionType, GoalStatus, BudgetSource } f
 const prisma = new PrismaClient();
 
 async function main() {
+  // Clean up existing data (to prevent from crashing)
+  await prisma.transaction.deleteMany();
+  await prisma.goal.deleteMany();
+  await prisma.user.deleteMany();
+
   // 1. Create user
   const user = await prisma.user.create({
     data: {

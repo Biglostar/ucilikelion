@@ -8,6 +8,7 @@ import dashboardRoutes from './routes/dashboardRoutes';
 import goalRoutes from './routes/goalRoutes';
 import transactionRoutes from "./routes/transactionRoutes";
 import { generateNaggingMessage } from "./services/aiService";
+import plaidRoutes from './routes/plaidRoutes';
 
 
 const app = express();
@@ -23,6 +24,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/goals', goalRoutes);
 
 app.use("/api/transactions", transactionRoutes);
+
+app.use('/api/plaid', plaidRoutes);
 
 // Start Server
 app.listen(PORT, () => {
