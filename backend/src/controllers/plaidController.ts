@@ -3,6 +3,7 @@ import { plaidClient } from '../services/plaidService';
 import { prisma } from '../prisma';
 import { CountryCode, Products } from 'plaid';
 import { TransactionType } from '@prisma/client';
+import { mapPlaidCategory } from '../utils/categoryMapper';
 
 // Dev only
 import { Products as PlaidProducts } from 'plaid';
@@ -87,6 +88,7 @@ export const syncTransactions = async (req: Request, res: Response) => {
         // Plaid amounts: Positive = Expense, Negative = Income
         const isExpense = pt.amount > 0;
         const type = isExpense ? TransactionType.EXPENSE : TransactionType.INCOME;
+        const plaidDetailedCategory = pt.personal_finance_category?.detailed;
         
         // Convert to cents (e.g., $5.50 -> 550)
         const amountCents = Math.round(Math.abs(pt.amount) * 100);
@@ -99,7 +101,7 @@ export const syncTransactions = async (req: Request, res: Response) => {
             title: pt.name || "Unknown",
             amountCents: amountCents,
             type: type,
-            category: pt.category ? pt.category[0] : "Uncategorized",
+            category: mapPlaidCategory(plaidDetailedCategory),
             occurredAt: new Date(pt.date),
           }
         });
