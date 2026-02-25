@@ -86,6 +86,39 @@ export async function createGoal(req: Request, res: Response) {
   }
 }
 
+// --- REUSABLE HELPER FUNCTION ---
+// This handles the math and database updates, without needing req/res!
+export const updateUserBudgets = async (userId: string) => {
+  const activeGoals = await prisma.goal.findMany({
+    where: { userId: userId, status: 'ACTIVE' }
+  });
+
+  let updatedCount = 0;
+
+  for (const goal of activeGoals) {
+    const spending = await prisma.transaction.aggregate({
+      _sum: { amountCents: true },
+      where: {
+        userId: userId,
+        category: goal.category, 
+        type: TransactionType.EXPENSE,
+        occurredAt: { gte: goal.startDate, lte: goal.endDate }
+      }
+    });
+
+    const totalSpent = spending._sum.amountCents || 0;
+
+    await prisma.goal.update({
+      where: { id: goal.id },
+      data: { currentSpentCents: totalSpent }
+    });
+
+    updatedCount++;
+  }
+  
+  return updatedCount; // Just return the number of updated goals
+};
+
 export async function calculateBudgetProgress(req: Request, res: Response) {
   try {
     const userId = req.header("x-user-id");
@@ -93,54 +126,16 @@ export async function calculateBudgetProgress(req: Request, res: Response) {
       return res.status(400).json({ error: "Missing x-user-id header" });
     }
 
-    // Fetch all ACTIVE goals for this user
-    const activeGoals = await prisma.goal.findMany({
-      where: {
-        userId: userId,
-        status: 'ACTIVE',
-      }
-    });
+    // Call the helper function!
+    const updatedCount = await updateUserBudgets(userId);
 
-    let updatedGoals = [];
-
-    // Loop through each goal to calculate how much they've spent
-    for (const goal of activeGoals) {
-      
-      // Ask Prisma to sum up all expenses in this specific category & timeframe
-      const spending = await prisma.transaction.aggregate({
-        _sum: {
-          amountCents: true, 
-        },
-        where: {
-          userId: userId,
-          category: goal.category, 
-          type: TransactionType.EXPENSE, // Only count money leaving the account
-          occurredAt: {
-            gte: goal.startDate,
-            lte: goal.endDate,   
-          }
-        }
-      });
-
-      const totalSpent = spending._sum.amountCents || 0;
-
-      // Update the Goal record with the new total
-      const updatedGoal = await prisma.goal.update({
-        where: { id: goal.id },
-        data: { currentSpentCents: totalSpent }
-      });
-
-      updatedGoals.push(updatedGoal);
-    }
-
-    res.json({ 
+    return res.json({ 
       success: true, 
-      message: `Updated progress for ${updatedGoals.length} goals.`,
-      goals: updatedGoals 
+      message: `Updated progress for ${updatedCount} goals.` 
     });
 
   } catch (error) {
     console.error("Budget Calculation Error:", error);
-    res.status(500).json({ error: "Failed to calculate budget progress" });
+    return res.status(500).json({ error: "Failed to calculate budget progress" });
   }
 }

@@ -4,6 +4,7 @@ import { prisma } from '../prisma';
 import { CountryCode, Products } from 'plaid';
 import { TransactionType } from '@prisma/client';
 import { mapPlaidCategory } from '../utils/categoryMapper';
+import { updateUserBudgets } from './goalController';
 
 // Dev only
 import { Products as PlaidProducts } from 'plaid';
@@ -108,6 +109,8 @@ export const syncTransactions = async (req: Request, res: Response) => {
         addedCount++;
       }
     }
+    // --- NEW LINE: Instantly recalculate budgets based on new data ---
+    await updateUserBudgets(userId);
 
     res.json({ success: true, added: addedCount });
   } catch (error) {

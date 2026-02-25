@@ -12,18 +12,31 @@ export async function getTransactions(req: Request, res: Response) {
 
     const { from, to } = req.query;
 
+    // 1. Start with the base filter (just the user ID)
+    const whereClause: any = { userId };
+
+    // 2. Safely add dates ONLY if they exist in the URL
+    if (from || to) {
+      whereClause.occurredAt = {};
+      
+      if (from) {
+        whereClause.occurredAt.gte = new Date(from as string);
+      }
+      
+      if (to) {
+        const toDate = new Date(to as string);
+        // Push the cutoff to the very last millisecond of the day!
+        toDate.setUTCHours(23, 59, 59, 999); 
+        whereClause.occurredAt.lte = toDate;
+      }
+    }
+
+    // DEBUG: This will print in your terminal so we know exactly what is happening
+    console.log("Searching with filter:", JSON.stringify(whereClause, null, 2));
+
+    // 3. Pass the safely built object to Prisma
     const transactions = await prisma.transaction.findMany({
-      where: {
-        userId,
-        ...(from && to
-          ? {
-              occurredAt: {
-                gte: new Date(from as string),
-                lte: new Date(to as string),
-              },
-            }
-          : {}),
-      },
+      where: whereClause,
       orderBy: {
         occurredAt: "desc",
       },
