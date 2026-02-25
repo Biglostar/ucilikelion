@@ -89,21 +89,22 @@ export async function generateAiBudgetAnalysis(
   const averageCents = monthlySummaries.reduce((acc, cur) => acc + cur.totalCents, 0) / 3;
 
   const prompt = `
-    System: You are a professional financial data analyst AI.
+    You are a professional financial data analyst AI.
     Task: Analyze the user's 3-month spending history for the '${category}' category and suggest a rational monthly budget.
 
     User Spending Data (Last 3 Months):
     ${monthlySummaries.map(s => `- ${s.month}: ${s.totalCents} USD`).join("\n")}
-    Arithmetic Average: ${averageCents / 100} USD
+    Arithmetic Average: ${averageCents} USD
 
     Instructions:
-    1. Evaluate the consistency and quality of the user's spending.
-    2. Recommend a "Suggested Budget" for the next month (integer). Do not just provide the average; adjust it based on spending trends.
-    3. Provide the output strictly in JSON format.
+    1. Evaluate the consistency of spending (is it increasing, decreasing, or volatile?).
+    2. Recommend a "Suggested Budget" for the next month in CENTS (integer). 
+    3. If there is a clear downward trend, suggest a tighter budget. If it's volatile, suggest a budget that covers the median.
+    4. Provide the output strictly in JSON format.
 
     Output Format (Strict JSON):
     {
-      "suggestedBudget": 500, 
+      "suggestedBudget": 500
     }
   `;
 

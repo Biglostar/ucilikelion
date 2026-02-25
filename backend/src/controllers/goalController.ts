@@ -14,7 +14,6 @@ export async function getGoals(req: Request, res: Response) {
   orderBy: { createdAt: "desc" },
 });
 
-  // 게이지바 계산 붙여서 반환
   const withGauge = goals.map((g: any) => {
     const budget = g.monthlyBudgetCents;
 
@@ -36,7 +35,7 @@ export async function getGoals(req: Request, res: Response) {
 
     return {
       ...g,
-      spentPct: Math.min(spentPct, 999), // 참고용
+      spentPct: Math.min(spentPct, 999),
       remainingPct,
       overBudget,
     };
@@ -50,52 +49,51 @@ export async function getGoals(req: Request, res: Response) {
   }
 }
 // ai 합치기 전 버전
-export async function createGoalManually(req: Request, res: Response) {
-  try {
-    const userId = req.header("x-user-id");
-    if (!userId) {
-      return res.status(400).json({ error: "Missing x-user-id header" });
-    }
-    const {
-      title,
-      memo,
-      icon,
-      category,
-      monthlyBudgetCents,
-      startDate,
-      endDate,
-    } = req.body;
+// export async function createGoalManually(req: Request, res: Response) {
+//   try {
+//     const userId = req.header("x-user-id");
+//     if (!userId) {
+//       return res.status(400).json({ error: "Missing x-user-id header" });
+//     }
+//     const {
+//       title,
+//       memo,
+//       icon,
+//       category,
+//       monthlyBudgetCents,
+//       startDate,
+//       endDate,
+//     } = req.body;
 
-    const goal = await prisma.goal.create({
-      data: {
-        userId,
-        title,
-        memo,
-        icon,
-        category,
-        monthlyBudgetCents: Number(monthlyBudgetCents),
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-      },
-    });
+//     const goal = await prisma.goal.create({
+//       data: {
+//         userId,
+//         title,
+//         memo,
+//         icon,
+//         category,
+//         monthlyBudgetCents: Number(monthlyBudgetCents),
+//         startDate: new Date(startDate),
+//         endDate: new Date(endDate),
+//       },
+//     });
 
-    return res.status(201).json(goal);
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: "Failed to create goal" });
-  }
-}
+//     return res.status(201).json(goal);
+//   } catch (e) {
+//     console.error(e);
+//     return res.status(500).json({ error: "Failed to create goal" });
+//   }
+// }
 // ai 합친 버전
 export async function createGoal(req: Request, res: Response) {
   try {
     const userId = req.header("x-user-id");
     const { title, category, monthlyBudgetCents, icon, memo, budgetSource } = req.body;
 
-    // 이번 달 1일과 말일을 자동으로 계산 (유저가 안 보내줘도 됨)
+    // 이번 달 1일과 말일을 자동으로 계산
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); // 이번 달 1일 00:00:00
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0); // 이번 달 말일 23:59:59
-
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0); // 이번달 기준
     const goal = await prisma.goal.create({
       data: {
         userId: userId as string,
@@ -105,8 +103,8 @@ export async function createGoal(req: Request, res: Response) {
         icon: icon || "💰",
         memo: memo || "",
         budgetSource: budgetSource || "USER_SET",
-        startDate: startOfMonth, // 자동 계산된 날짜 사용
-        endDate: endOfMonth,     // 자동 계산된 날짜 사용
+        startDate: startOfMonth,
+        endDate: endOfMonth,
         status: "ACTIVE"
       }
     });
@@ -126,7 +124,7 @@ export async function getAiSuggestedBudget(req: Request, res: Response) {
     if (!userId || !category) return res.status(400).json({ error: "Missing params" });
 
     const now = new Date();
-    // 오래된 달부터 나열하기 위해 3, 2, 1달 전으로 계산
+    //3, 2, 1달 전으로 계산
     const months = [3, 2, 1].map(i => {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       return {
@@ -161,6 +159,6 @@ export async function getAiSuggestedBudget(req: Request, res: Response) {
     return res.json(aiSuggestion);
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: "AI 분석 실패" });
+    return res.status(500).json({ error: "ai 예산 계산 에러" });
   }
 }
