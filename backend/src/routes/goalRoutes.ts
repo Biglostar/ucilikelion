@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getGoals, createGoal } from '../controllers/goalController';
+import { getGoals, createGoal, calculateBudgetProgress } from '../controllers/goalController';
 
 const router = Router();
 
@@ -8,5 +8,7 @@ router.get('/', getGoals);
 
 // POST /api/goals (Create a new goal)
 router.post('/', createGoal);
+
+router.post('/calculate', calculateBudgetProgress);
 
 export default router;
