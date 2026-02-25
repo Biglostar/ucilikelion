@@ -6,11 +6,12 @@ export function calculateRemainingPct(currentSpent: number, budget: number): num
   const remaining = budget - currentSpent;
   return Math.max(0, (remaining / budget) * 100);
 }
-// 나중에 로직 바꾸기 (캐릭터 갯수랑 체크 포인트 매치)
 export function getCharacterStatus(remainingPct: number) {
-  if (remainingPct > 50) return "RICH";
-  if (remainingPct > 10) return "NORMAL";
-  return "POOR";
+  if (remainingPct > 75) return "RICH";
+      else if (remainingPct > 50) return "STABLE";
+      else if (remainingPct > 25) return "SURVIVING";
+      else if (remainingPct > 0) return "DESPERATE";
+      else return "BROKE";
 }
 
 export function getPassedCheckpoint(lastAlertPct: number, currentPct: number): number | "OVER_BUDGET" | null {
@@ -19,7 +20,6 @@ export function getPassedCheckpoint(lastAlertPct: number, currentPct: number): n
     return "OVER_BUDGET";
   }
 
-  //새로운 체크포인트를 통과하는 순간마다 (75, 50, 25, 10, 0)
   const checkpoints = [75, 50, 25, 10, 0];
   const passed = checkpoints.find(cp => currentPct <= cp && cp < lastAlertPct);
   
