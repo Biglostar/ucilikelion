@@ -12,7 +12,7 @@ import { Products as PlaidProducts } from 'plaid';
 // 1. Create Link Token (Frontend will call this when user clicks "Connect Bank")
 export const createLinkToken = async (req: Request, res: Response) => {
   try {
-    const userId = req.headers['user-id'] as string;
+    const userId = req.headers['x-user-id'] as string;
 
     const response = await plaidClient.linkTokenCreate({
       user: { client_user_id: userId },
@@ -32,7 +32,7 @@ export const createLinkToken = async (req: Request, res: Response) => {
 // 2. Exchange Public Token
 export const exchangePublicToken = async (req: Request, res: Response) => {
   try {
-    const userId = req.headers['user-id'] as string;
+    const userId = req.headers['x-user-id'] as string;
     const { public_token } = req.body;
 
     const response = await plaidClient.itemPublicTokenExchange({
@@ -57,7 +57,7 @@ export const exchangePublicToken = async (req: Request, res: Response) => {
 // 3. Sync Transactions (Fetch from Plaid and save to DB)
 export const syncTransactions = async (req: Request, res: Response) => {
   try {
-    const userId = req.headers['user-id'] as string;
+    const userId = req.headers['x-user-id'] as string;
 
     // Get the user's saved Plaid token
     const user = await prisma.user.findUnique({ where: { id: userId } });
