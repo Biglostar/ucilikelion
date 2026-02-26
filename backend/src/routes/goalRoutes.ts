@@ -10,4 +10,6 @@ router.get('/', getGoals);
 // POST /api/goals (Create a new goal)
 
 router.post('/', createGoal);
+router.post('/calculate', calculateBudgetProgress);
+
 export default router;

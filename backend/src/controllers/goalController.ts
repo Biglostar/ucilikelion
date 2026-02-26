@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from "../prisma";
 import { generateAiBudgetAnalysis } from '../services/aiService';
+import { TransactionType } from '@prisma/client';
 
 export async function getGoals(req: Request, res: Response) {
   try {
@@ -10,28 +11,29 @@ export async function getGoals(req: Request, res: Response) {
     }
 
     const goals = await prisma.goal.findMany({
-  where: { userId },
-  orderBy: { createdAt: "desc" },
-});
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+    });
 
-  const withGauge = goals.map((g: any) => {
-    const budget = g.monthlyBudgetCents;
+    // 게이지바 계산 붙여서 반환
+    const withGauge = goals.map((g: any) => {
+      const budget = g.monthlyBudgetCents;
 
-    // budget이 0이면 remaining을 0
-    if (!budget || budget <= 0) {
-      return {
-        ...g,
-        spentPct: 0,
-        remainingPct: 0,
-        overBudget: false,
-      };
-    }
+      // budget이 0이면 remaining을 0
+      if (!budget || budget <= 0) {
+        return {
+          ...g,
+          spentPct: 0,
+          remainingPct: 0,
+          overBudget: false,
+        };
+      }
 
-    const spentPctRaw = Math.floor((g.currentSpentCents / budget) * 100);
-    const spentPct = Math.max(0, spentPctRaw);
+      const spentPctRaw = Math.floor((g.currentSpentCents / budget) * 100);
+      const spentPct = Math.max(0, spentPctRaw);
 
-    const remainingPct = Math.max(0, 100 - spentPct);
-    const overBudget = g.currentSpentCents >= budget;
+      const remainingPct = Math.max(0, 100 - spentPct);
+      const overBudget = g.currentSpentCents >= budget;
 
     return {
       ...g,
@@ -116,49 +118,56 @@ export async function createGoal(req: Request, res: Response) {
   }
 }
 
-export async function getAiSuggestedBudget(req: Request, res: Response) {
-  try {
-    const userId = req.header("x-user-id");
-    const { category } = req.query;
+// // --- REUSABLE HELPER FUNCTION ---
+// // This handles the math and database updates, without needing req/res!
+// export const updateUserBudgets = async (userId: string) => {
+//   const activeGoals = await prisma.goal.findMany({
+//     where: { userId: userId, status: 'ACTIVE' }
+//   });
 
-    if (!userId || !category) return res.status(400).json({ error: "Missing params" });
+//   let updatedCount = 0;
 
-    const now = new Date();
-    //3, 2, 1달 전으로 계산
-    const months = [3, 2, 1].map(i => {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      return {
-        start: date,
-        end: new Date(date.getFullYear(), date.getMonth() + 1, 0),
-        label: `${date.getMonth() + 1}월`
-      };
-    });
+//   for (const goal of activeGoals) {
+//     const spending = await prisma.transaction.aggregate({
+//       _sum: { amountCents: true },
+//       where: {
+//         userId: userId,
+//         category: goal.category, 
+//         type: TransactionType.EXPENSE,
+//         occurredAt: { gte: goal.startDate, lte: goal.endDate }
+//       }
+//     });
 
-    const monthlySummaries = await Promise.all(
-      months.map(async (m) => {
-        const aggregate = await prisma.transaction.aggregate({
-          where: {
-            userId,
-            category: category as string,
-            type: "EXPENSE",
-            occurredAt: { gte: m.start, lte: m.end }
-          },
-          _sum: { amountCents: true }
-        });
-        return { month: m.label, totalCents: aggregate._sum.amountCents || 0 };
-      })
-    );
+//     const totalSpent = spending._sum.amountCents || 0;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+//     await prisma.goal.update({
+//       where: { id: goal.id },
+//       data: { currentSpentCents: totalSpent }
+//     });
 
-    const aiSuggestion = await generateAiBudgetAnalysis(
-      category as string,
-      monthlySummaries
-    );
+//     updatedCount++;
+//   }
+  
+//   return updatedCount; // Just return the number of updated goals
+// };
 
-    return res.json(aiSuggestion);
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: "ai 예산 계산 에러" });
-  }
-}
+// export async function calculateBudgetProgress(req: Request, res: Response) {
+//   try {
+//     const userId = req.header("x-user-id");
+//     if (!userId) {
+//       return res.status(400).json({ error: "Missing x-user-id header" });
+//     }
+
+//     // Call the helper function!
+//     const updatedCount = await updateUserBudgets(userId);
+
+//     return res.json({ 
+//       success: true, 
+//       message: `Updated progress for ${updatedCount} goals.` 
+//     });
+
+//   } catch (error) {
+//     console.error("Budget Calculation Error:", error);
+//     return res.status(500).json({ error: "Failed to calculate budget progress" });
+//   }
+// }
