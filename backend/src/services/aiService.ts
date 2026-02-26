@@ -12,8 +12,8 @@ export async function generateNaggingMessage(
 ): Promise<string> {
   
   const prompt = `
-    Role: You are a cynical, stingy financial advisor friend for a household account book app.
-    Context: The user reached the ${checkpoint}% remaining budget checkpoint for "${category}".
+    Role: You are a cold-hearted, cynical AI financial assistant.
+    Context: The user has remaining ${checkpoint}% of their budget for '${category}'.
     Tone Intensity: ${level} (This is the user's chosen "Roast Level")
 
     Level-Specific Instructions:
@@ -21,10 +21,12 @@ export async function generateNaggingMessage(
     2. MEDIUM: Direct sarcasm. Make the user feel pathetic. (e.g., "네 통장은 이미 울고 있어.")
     3. SPICY: Extremely aggressive and rude. Criticize the user's lack of self-control. (e.g., "거지 되려고 작정했냐?")
 
-    Checkpoint Context:
-    - If checkpoint is 75-50: It's the beginning of a downfall.
-    - If checkpoint is 25-10: It's a critical danger zone.
-    - If checkpoint is 0 or less: The user is officially broke. Be most ruthless here.
+    Setting Concept: The character's environment downgrades as ${checkpoint} decreases, reflecting the user's financial situation.
+    - 100%: Living in a luxury penthouse with fine dining. (Status: FLEXIN)
+    - 75%: Moving to a decent apartment, eating out less. (Status: CHILLIN)
+    - 50%: Cramped studio, eating instant noodles. (Status: SURVIVING)
+    - 25%: Rooftop room with a leaking ceiling, no heating. (Status: DESPERATE)
+    - 0%: Sleeping on a cold cardboard box outside. (Status: BROKE)
 
     Constraints:
     - Language: Korean (close friend feel)
@@ -39,5 +41,86 @@ export async function generateNaggingMessage(
   } catch (error) {
     console.error("Gemini API Error:", error);
     return "통장 잔고 생각 안 하니? 그만 좀 써."; 
+  }
+}
+
+// 앱 푸쉬용 알림 문구 생성
+export async function generatePushNotification(
+  category: string,
+  spentPct: number, // 퍼센트
+  roastLevel: "MILD" | "MEDIUM" | "SPICY"
+) {
+  const prompt = `
+    Role: You are a cynical, stingy financial advisor friend for a household account book app.
+    Context: The user reached the ${spentPct}% remaining budget checkpoint for "${category}".
+    Tone Intensity: ${roastLevel} (This is the user's chosen "Roast Level")
+
+    Level-Specific Instructions:
+    1. MILD: Sarcastic but still advice-oriented. Like a friend shaking their head. (e.g., "75% 남았는데 벌써 그렇게 써?")
+    2. MEDIUM: Direct sarcasm. Make the user feel pathetic. (e.g., "네 통장은 이미 울고 있어.")
+    3. SPICY: Extremely aggressive and rude. Criticize the user's lack of self-control. (e.g., "거지 되려고 작정했냐?")
+
+    Checkpoint Context:
+    - If checkpoint is 100-75: User is doing well, but still give a light sarcastic comment to encourage them to keep it up.
+    - If checkpoint is 75-50: It's the beginning of a downfall.
+    - If checkpoint is 50-25: User is in the danger zone, start being more critical.
+    - If checkpoint is 25-10: It's obviously a danger zone.
+    - If checkpoint is 0 or less: The user is officially broke. Be most ruthless here.
+
+    Constraints:
+    - Language: Korean (close friend feel)
+    - Length: Under 20 characters.
+    - No emojis.
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  } catch (error) {
+    console.error("AI Push Message Error:", error);
+    return "작작 좀 써! 벌써 예산 다 차간다. 💸"; 
+  }
+}
+
+export async function generateAiBudgetAnalysis(
+  category: string,
+  monthlySummaries: { month: string; totalCents: number }[]
+) {
+  const averageCents = monthlySummaries.reduce((acc, cur) => acc + cur.totalCents, 0) / 3;
+
+  const prompt = `
+    You are a professional financial data analyst AI.
+    Task: Analyze the user's 3-month spending history for the '${category}' category and suggest a rational monthly budget.
+
+    User Spending Data (Last 3 Months):
+    ${monthlySummaries.map(s => `- ${s.month}: ${s.totalCents} USD`).join("\n")}
+    Arithmetic Average: ${averageCents} USD
+
+    Instructions:
+    1. Evaluate the consistency of spending (is it increasing, decreasing, or volatile?).
+    2. Recommend a "Suggested Budget" for the next month in CENTS (integer). 
+    3. If there is a clear downward trend, suggest a tighter budget. If it's volatile, suggest a budget that covers the median.
+    4. Provide the output strictly in JSON format.
+
+    Output Format (Strict JSON):
+    {
+      "suggestedBudget": 500
+    }
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    let responseText = result.response.text();
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return { suggestedBudget: parsed.suggestedBudget };
+    }
+    
+    throw new Error("Invalid AI Response");
+  } catch (error) {
+    console.error("AI Analysis Error:", error);
+    return { suggestedBudget: Math.floor(averageCents) };
   }
 }

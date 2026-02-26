@@ -12,8 +12,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
   backend:
-    build: ./backend
+    build: .
     env_file:
-      - ./backend/.env
+      - .env
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+      - "5555:5555"
 volumes:
   postgres_data:
