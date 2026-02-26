@@ -10,9 +10,12 @@ import UIKit
 
 @main
 struct LikeLionBudgetApp: App {
+    @StateObject private var onboardingStore = OnboardingStore()
+
     var body: some Scene {
         WindowGroup {
-            RootTabView()
+            ContentView()
+                .environmentObject(onboardingStore)
         }
     }
 }

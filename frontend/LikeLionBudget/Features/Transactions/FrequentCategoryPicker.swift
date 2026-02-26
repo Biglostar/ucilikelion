@@ -42,32 +42,13 @@ struct FrequentCategoryPicker: View {
     var body: some View {
         let chips = recent.list().isEmpty ? fallbackTop5 : Array(recent.list().prefix(5))
 
-        VStack(alignment: .leading, spacing: 10) {
-
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2),
-                spacing: 10
-            ) {
-                ForEach(chips, id: \.self) { c in
-                    chip(c)
-                }
-
-                Button { showAll = true } label: {
-                    HStack(spacing: 8) {
-                        Text("📚")
-                            .font(.system(size: 16))
-                        Text("전체")
-                            .font(.custom(Theme.fontLaundry, size: 15))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Theme.beige)
-                    .foregroundStyle(Theme.text)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.black.opacity(0.06)))
-                }
-                .buttonStyle(.plain)
-            }
+        FlowLayout(horizontalSpacing: 10, verticalSpacing: 10) {
+            if chips.count > 0 { chip(chips[0]) }
+            if chips.count > 1 { chip(chips[1]) }
+            if chips.count > 2 { chip(chips[2]) }
+            if chips.count > 3 { chip(chips[3]) }
+            if chips.count > 4 { chip(chips[4]) }
+            wholeButton
         }
         .sheet(isPresented: $showAll) {
             CategoryPickerSheet(selected: $selected) { picked in
@@ -83,7 +64,26 @@ struct FrequentCategoryPicker: View {
         }
     }
 
-    // MARK: - Chip UI
+    private var wholeButton: some View {
+        Button { showAll = true } label: {
+            HStack(spacing: 8) {
+                Text("📚")
+                    .font(.system(size: 16))
+                Text("전체")
+                    .font(.custom(Theme.fontLaundry, size: 15))
+            }
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .background(Theme.beige)
+            .foregroundStyle(Theme.text)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.black.opacity(0.06)))
+        }
+        .buttonStyle(.plain)
+        .fixedSize(horizontal: true, vertical: true)
+    }
+
+    // MARK: - Chip UI (글자 길이에 맞춘 크기, 아기자기한 배치)
     private func chip(_ c: BudgetCategory) -> some View {
         Button {
             selected = c
@@ -92,21 +92,19 @@ struct FrequentCategoryPicker: View {
             HStack(spacing: 8) {
                 Text(c.emoji)
                     .font(.system(size: 16))
-
                 Text(c.displayNameKR)
                     .font(.custom(Theme.fontLaundry, size: 15))
                     .lineLimit(1)
             }
-            .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-
+            .padding(.horizontal, 14)
             .background(selected == c ? Theme.progressFill : Theme.beige)
             .foregroundStyle(selected == c ? .white : Theme.text)
-
             .clipShape(Capsule())
             .overlay(Capsule().stroke(Color.black.opacity(0.06)))
         }
         .buttonStyle(.plain)
+        .fixedSize(horizontal: true, vertical: true)
     }
 }
 

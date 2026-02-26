@@ -22,8 +22,8 @@ struct SpendProgressCard: View {
         let progress = max(raw, 0)
         let isFull = progress >= 1.0
 
-        let fillColor = isFull ? Theme.overFill : Theme.progressFill
-        let bgColor   = isFull ? Theme.overBG   : Theme.progressBG
+        let fillColor = isFull ? Theme.minus : Theme.progressFill
+        let bgColor   = isFull ? Theme.overBG : Theme.progressBG
 
         VStack(spacing: 10) {
 
