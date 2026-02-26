@@ -15,11 +15,10 @@ struct SelectedDay: Identifiable {
 struct MonthCalendarView: View {
     @Binding var month: Date
     @ObservedObject var store: TransactionStore
+    @Binding var selectedDay: SelectedDay?
 
-    @State private var selectedDay: SelectedDay? = nil
-
-    private let weekdaySymbols = ["일", "월", "화", "수", "목", "금", "토"]
-    private var grid: [Date?] { daysInGrid() }
+    private let weekdaySymbols = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
+    private var grid: [Date] { daysInGrid() }
 
     // MARK: Body
     var body: some View {
@@ -31,50 +30,39 @@ struct MonthCalendarView: View {
                 HStack {
                     ForEach(weekdaySymbols, id: \.self) { day in
                         Text(day)
-                            .font(.caption.weight(.semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(Theme.weekdaySimbol)
                             .frame(maxWidth: .infinity)
                     }
                 }
                 .padding(.horizontal, 4)
 
-                // MARK: - Grid
+                // MARK: - Grid (현재 달 + 이전/다음 달 날짜)
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.flexible()), count: 7),
                     spacing: 10
                 ) {
-                    ForEach(Array(grid.enumerated()), id: \.offset) { _, dateOpt in
-                        if let date = dateOpt {
-                            DayCellView(
-                                date: date,
-                                netCents: netCents(for: date),
-                                isSelected: isSelected(date)
-                            )
-                            .onTapGesture {
-                                selectedDay = SelectedDay(date: date)
-                            }
-                        } else {
-                            Color.clear.frame(height: 42)
+                    ForEach(Array(grid.enumerated()), id: \.offset) { _, date in
+                        DayCellView(
+                            date: date,
+                            netCents: netCents(for: date),
+                            isSelected: isSelected(date),
+                            isCurrentMonth: isInDisplayedMonth(date)
+                        )
+                        .onTapGesture {
+                            selectedDay = SelectedDay(date: date)
                         }
                     }
                 }
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 12)
+            .padding(.vertical, Theme.spacingRegular)
+            .padding(.horizontal, Theme.spacingRegular)
             .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.black.opacity(0.08))
+                RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous)
+                    .stroke(Color.black.opacity(Theme.strokeOpacityMedium))
             )
-        }
-
-        // MARK: - Day detail sheet
-        .sheet(item: $selectedDay) { item in
-            DayDetailSheetContainer(date: item.date, store: store)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(.white)
         }
     }
 
@@ -118,24 +106,38 @@ struct MonthCalendarView: View {
     }
 
     // MARK: - Grid data
-    private func daysInGrid() -> [Date?] {
+    private func daysInGrid() -> [Date] {
         let cal = MockData.usCalendar
         let start = MockData.startOfMonth(month)
-
+        let range = cal.range(of: .day, in: .month, for: start) ?? 1..<31
+        let monthDays = range.count
         let weekday = cal.component(.weekday, from: start)
         let leading = weekday - 1
-        var result: [Date?] = Array(repeating: nil, count: leading)
+        let remainder = (leading + monthDays) % 7
+        let trailing = remainder == 0 ? 0 : (7 - remainder)
 
-        let range = cal.range(of: .day, in: .month, for: start) ?? 1..<31
-        for offset in 0..<range.count {
-            result.append(cal.date(byAdding: .day, value: offset, to: start))
+        var result: [Date] = []
+
+        if leading > 0, let prevMonth = cal.date(byAdding: .month, value: -1, to: start) {
+            let prevRange = cal.range(of: .day, in: .month, for: prevMonth) ?? 1..<31
+            let prevDays = prevRange.count
+            for i in 0..<leading {
+                result.append(cal.date(byAdding: .day, value: prevDays - leading + i, to: prevMonth)!)
+            }
         }
-
-        let remainder = result.count % 7
-        if remainder != 0 {
-            result.append(contentsOf: Array(repeating: nil, count: 7 - remainder))
+        for offset in 0..<monthDays {
+            result.append(cal.date(byAdding: .day, value: offset, to: start)!)
+        }
+        if trailing > 0, let nextMonth = cal.date(byAdding: .month, value: 1, to: start) {
+            for offset in 0..<trailing {
+                result.append(cal.date(byAdding: .day, value: offset, to: nextMonth)!)
+            }
         }
         return result
+    }
+
+    private func isInDisplayedMonth(_ date: Date) -> Bool {
+        MockData.usCalendar.isDate(date, equalTo: month, toGranularity: .month)
     }
 
     // MARK: - Helpers
@@ -150,7 +152,7 @@ struct MonthCalendarView: View {
 }
 
 // MARK: - DayDetailSheetContainer
-private struct DayDetailSheetContainer: View {
+struct DayDetailSheetContainer: View {
     let date: Date
     @ObservedObject var store: TransactionStore
     @Environment(\.dismiss) private var dismiss

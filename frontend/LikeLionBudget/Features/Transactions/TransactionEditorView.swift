@@ -63,9 +63,9 @@ struct TransactionEditorView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: Theme.spacingStandard) {
 
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: Theme.spacingRegular) {
 
                         headerBlock()
 
@@ -74,7 +74,7 @@ struct TransactionEditorView: View {
                         inputBlock()
 
                         Text("카테고리")
-                            .font(.custom(Theme.fontLaundry, size: 16))
+                            .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                             .foregroundStyle(Theme.text)
 
                         FrequentCategoryPicker(selected: $category)
@@ -86,9 +86,9 @@ struct TransactionEditorView: View {
                         buttonsBlock()
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 24)
+                .padding(.horizontal, Theme.screenHorizontal)
+                .padding(.top, Theme.screenTop)
+                .padding(.bottom, Theme.screenBottom)
             }
             .background(Color.white)
 
@@ -150,7 +150,7 @@ struct TransactionEditorView: View {
                 Divider().opacity(0.35)
             }
         }
-        .cardStyle(bg: Color.clear, corner: 8, strokeOpacity: 0.06, padding: 14)
+        .cardStyle(bg: Color.clear, corner: Theme.cardCorner, strokeOpacity: 0.06, padding: Theme.cardPadding)
     }
 
     @ViewBuilder
@@ -158,7 +158,7 @@ struct TransactionEditorView: View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle(isOn: $isFixed) {
                 Text("고정지출")
-                    .font(.custom(Theme.fontLaundry, size: 16))
+                    .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                     .foregroundStyle(Theme.text)
             }
             .tint(Theme.progressFill)
@@ -167,14 +167,14 @@ struct TransactionEditorView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.text.opacity(0.65))
         }
-        .cardStyle(bg: Theme.beige, corner: 8, strokeOpacity: 0.06, padding: 14)
+        .cardStyle(bg: Theme.beige, corner: Theme.cardCorner, strokeOpacity: 0.06, padding: Theme.cardPadding)
     }
 
     @ViewBuilder
     private func dateTimeBlock() -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("날짜 · 시간")
-                .font(.custom(Theme.fontLaundry, size: 16))
+                .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                 .foregroundStyle(Theme.text)
 
             DatePicker(
@@ -184,7 +184,7 @@ struct TransactionEditorView: View {
             )
             .datePickerStyle(.compact)
         }
-        .cardStyle(bg: Theme.beige, corner: 8, strokeOpacity: 0.06, padding: 14)
+        .cardStyle(bg: Theme.beige, corner: Theme.cardCorner, strokeOpacity: 0.06, padding: Theme.cardPadding)
     }
 
     @ViewBuilder
@@ -192,12 +192,12 @@ struct TransactionEditorView: View {
         VStack(spacing: 10) {
             Button { save() } label: {
                 Text(isEdit ? "저장" : "추가하기")
-                    .font(.custom(Theme.fontLaundry, size: 16))
+                    .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, Theme.buttonVerticalPadding)
                     .background(Theme.progressFill)
                     .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
             }
             .disabled(!canSave)
             .opacity(canSave ? 1.0 : 0.5)
@@ -208,12 +208,12 @@ struct TransactionEditorView: View {
                     dismiss()
                 } label: {
                     Text("삭제")
-                        .font(.custom(Theme.fontLaundry, size: 16))
+                        .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                        .padding(.vertical, Theme.buttonVerticalPadding)
                         .background(Theme.overBG)
                         .foregroundStyle(Theme.overFill)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
                 }
             }
         }
@@ -306,12 +306,12 @@ private struct ExpenseIncomeSegment: View {
                     }
                 }
             }
-            .padding(4)
+            .padding(Theme.spacingTight)
         }
         .frame(height: 50)
         .overlay(
             Capsule()
-                .stroke(Color.black.opacity(0.06))
+                .stroke(Color.black.opacity(Theme.strokeOpacityLight))
         )
     }
 
@@ -323,7 +323,7 @@ private struct ExpenseIncomeSegment: View {
     ) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.custom(Theme.fontLaundry, size: 16))
+                .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(
                     Capsule()

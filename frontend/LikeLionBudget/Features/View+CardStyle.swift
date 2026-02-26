@@ -12,9 +12,9 @@ extension View {
     // MARK: - Base Card (기존 유지)
     func cardStyle(
         bg: Color = .white,
-        corner: CGFloat = 18,
-        strokeOpacity: Double = 0.08,
-        padding: CGFloat = 16
+        corner: CGFloat = Theme.cardCorner,
+        strokeOpacity: Double = Theme.strokeOpacityMedium,
+        padding: CGFloat = Theme.screenHorizontal
     ) -> some View {
         self
             .padding(padding)
@@ -32,27 +32,27 @@ extension View {
             .background(Color.white)
     }
 
-    func llContainer(corner: CGFloat = 8) -> some View {
+    func llContainer(corner: CGFloat = Theme.cardCorner) -> some View {
         self
-            .padding(14)
+            .padding(Theme.cardPadding)
             .background(Theme.beige)
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .stroke(Color.black.opacity(0.06))
+                    .stroke(Color.black.opacity(Theme.strokeOpacityLight))
             )
     }
 
-    func llCard(corner: CGFloat = 8, padding: CGFloat = 14) -> some View {
+    func llCard(corner: CGFloat = Theme.cardCorner, padding: CGFloat = Theme.cardPadding) -> some View {
         self.cardStyle(
             bg: Theme.progressBG,
             corner: corner,
-            strokeOpacity: 0.06,
+            strokeOpacity: Theme.strokeOpacityLight,
             padding: padding
         )
     }
 
-    func llDivider(opacity: Double = 0.10) -> some View {
+    func llDivider(opacity: Double = Theme.dividerOpacity) -> some View {
         self.overlay(
             Rectangle().frame(height: 1).foregroundStyle(Color.black.opacity(opacity)),
             alignment: .bottom
@@ -60,17 +60,17 @@ extension View {
     }
 
     // MARK: - Backward compat
-    func beigeContainer(corner: CGFloat = 8) -> some View {
+    func beigeContainer(corner: CGFloat = Theme.cardCorner) -> some View {
         self.llContainer(corner: corner)
     }
 
-    func softDividerBox(corner: CGFloat = 8) -> some View {
+    func softDividerBox(corner: CGFloat = Theme.cardCorner) -> some View {
         self
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
+            .padding(.vertical, Theme.spacingSmall + 4)
+            .padding(.horizontal, Theme.spacingRegular)
             .overlay(
                 RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .stroke(Color.black.opacity(0.07))
+                    .stroke(Color.black.opacity(Theme.strokeOpacityBorder))
             )
     }
 
@@ -83,8 +83,8 @@ extension View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(title)
-                        .font(.custom(Theme.fontLaundry, size: 22))
-                        .foregroundStyle(Theme.progressFill)
+                        .font(.custom(Theme.fontLaundry, size: Theme.titleSize))
+                        .foregroundStyle(Theme.rose)
                 }
             }
     }

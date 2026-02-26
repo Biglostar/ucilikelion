@@ -11,34 +11,37 @@ struct DayCellView: View {
     let date: Date
     let netCents: Int
     let isSelected: Bool
+    var isCurrentMonth: Bool = true
 
     private var isToday: Bool {
         MockData.usCalendar.isDateInToday(date)
     }
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: Theme.spacingTight) {
             Text("\(dayNumber(date))")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.black)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isCurrentMonth ? Color.black : Theme.weekdaySimbol)
 
-            Text(netText(netCents))
-                .font(.caption2)
-                .foregroundStyle(netCents >= 0 ? Theme.plus : Theme.minus)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            if isCurrentMonth {
+                Text(netText(netCents))
+                    .font(.caption)
+                    .foregroundStyle(netCents >= 0 ? Theme.plus : Theme.minus)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 42)
-        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .padding(.vertical, Theme.spacingSmall)
         .background(backgroundColor)
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(borderColor, lineWidth: 1.8)
+            RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous)
+                .stroke(borderColor, lineWidth: Theme.strokeLineWidthCell)
         )
     }
 
     private var backgroundColor: Color {
-        // 거래 있는 날 배경색
+        if !isCurrentMonth { return Color.clear }
         if netCents != 0 { return Theme.beige }
         return Color.clear
     }

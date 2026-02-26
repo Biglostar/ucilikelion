@@ -7,21 +7,34 @@
 
 import SwiftUI
 
+private struct GoalSheetItem: Identifiable {
+    let goal: Goal
+    var id: UUID { goal.id }
+}
+
 struct GoalsListView: View {
+    @EnvironmentObject private var onboardingStore: OnboardingStore
     @ObservedObject var goalsStore: GoalsStore
     @State private var showAdd: Bool = false
+    @State private var goalToEdit: GoalSheetItem? = nil
+    @State private var didOpenAddGoalForOnboarding: Bool = false
+    @State private var onboardingFrames: [Int: [CGRect]] = [:]
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
-
-                    VStack(spacing: 10) {
-                        ForEach($goalsStore.goals) { $goal in
-                            goalRow(goal: $goal)
+                VStack(spacing: Theme.spacingStandard) {
+                    VStack(spacing: Theme.spacingRegular) {
+                        ForEach(Array(goalsStore.goals.enumerated()), id: \.element.id) { index, goal in
+                            goalRow(goal: goalsStore.binding(for: goal.id) ?? .constant(goal), isFirst: index == 0)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    goalToEdit = GoalSheetItem(goal: goal)
+                                }
                         }
                     }
                     .llContainer()
+                    .onboardingFrame(stepId: 8)
 
                     Button {
                         showAdd = true
@@ -29,27 +42,71 @@ struct GoalsListView: View {
                         Text("새로운 목표 추가하기")
                             .font(.custom(Theme.fontLaundry, size: 16))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                            .padding(.vertical, Theme.buttonVerticalPadding)
                             .background(Theme.progressFill)
                             .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+                    }
+                    .onboardingFrame(stepId: 10)
+                }
+                .padding(.horizontal, Theme.screenHorizontal)
+                .padding(.top, Theme.screenTop + Theme.screenTopNavExtra)
+                .padding(.bottom, Theme.screenBottom)
+            }
+            .background(Color.white)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("나의 목표")
+                        .font(.custom(Theme.fontLaundry, size: Theme.titleSize))
+                        .foregroundStyle(Theme.rose)
+                }
+            }
+            .onPreferenceChange(OnboardingFramePreferenceKey.self) { value in
+                onboardingFrames = value
+                onboardingStore.mergeOnboardingFrames(value)
+            }
+            .onChange(of: onboardingStore.requestShowAddGoal) { _, requested in
+                if requested {
+                    showAdd = true
+                    didOpenAddGoalForOnboarding = true
+                    onboardingStore.requestShowAddGoal = false
+                }
+            }
+            .onChange(of: onboardingStore.currentStep) { _, step in
+                if step == 9 && didOpenAddGoalForOnboarding {
+                    showAdd = false
+                    didOpenAddGoalForOnboarding = false
+                }
+            }
+            .sheet(isPresented: $showAdd, onDismiss: {
+                if didOpenAddGoalForOnboarding {
+                    onboardingStore.advanceFromAddGoalSheet()
+                    didOpenAddGoalForOnboarding = false
+                }
+            }) {
+                ZStack(alignment: .bottom) {
+                    AddGoalView(goalsStore: goalsStore)
+                        .presentationDetents([.large])
+                    if didOpenAddGoalForOnboarding {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { showAdd = false }
+                        Text("아무 곳이나 탭하면 다음으로 넘어갑니다")
+                            .font(.custom(Theme.fontLaundry, size: Theme.smallBodySize))
+                            .foregroundStyle(Theme.text.opacity(0.5))
+                            .padding(.bottom, Theme.screenBottom + 8)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 28)
             }
-            .llScreen()
-            .llNavTitle("나의 목표")
-            .sheet(isPresented: $showAdd) {
-                AddGoalView(goalsStore: goalsStore)
+            .sheet(item: $goalToEdit) { item in
+                AddGoalView(goalsStore: goalsStore, editingGoal: item.goal)
                     .presentationDetents([.large])
             }
         }
     }
 
     @ViewBuilder
-    private func goalRow(goal: Binding<Goal>) -> some View {
+    private func goalRow(goal: Binding<Goal>, isFirst: Bool) -> some View {
         HStack(spacing: 12) {
 
             ZStack {
@@ -73,16 +130,16 @@ struct GoalsListView: View {
 
             Spacer()
 
-            // 목표 통합 토글
             Toggle("", isOn: combinedToggleBinding(for: goal))
                 .labelsHidden()
                 .tint(Theme.progressFill)
+                .onboardingFrame(stepId: 9)
         }
         .padding(12)
         .background(Theme.beige)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous)
                 .stroke(Color.black.opacity(0.05))
         )
     }

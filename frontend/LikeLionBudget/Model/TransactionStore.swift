@@ -4,17 +4,43 @@
 //
 //  Created by samuel kim on 1/14/26.
 //
+//
 
 import Foundation
 import Combine
 
 final class TransactionStore: ObservableObject {
-    @Published var transactions: [Transaction] = []
+    @Published private(set) var transactions: [Transaction] = []
 
     private let cal: Calendar = MockData.usCalendar
+    private var _realTransactions: [Transaction] = []
+    private var _tutorialTransactions: [Transaction] = []
+    private weak var onboardingStore: OnboardingStore?
+    private var cancellable: AnyCancellable?
 
     init() {
-        seedMockIfNeeded()
+        _realTransactions = []
+        _tutorialTransactions = Self.buildTutorialMockTransactions()
+        transactions = _realTransactions
+    }
+
+    func bindOnboarding(_ store: OnboardingStore) {
+        guard onboardingStore == nil else { return }
+        onboardingStore = store
+        refreshDisplayedTransactions()
+        cancellable = store.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshDisplayedTransactions()
+            }
+    }
+
+    private var showTutorialData: Bool {
+        onboardingStore?.showTutorialSeedData ?? false
+    }
+
+    private func refreshDisplayedTransactions() {
+        transactions = showTutorialData ? _tutorialTransactions : _realTransactions
     }
 
     // MARK: - 날짜별 거래
@@ -45,33 +71,53 @@ final class TransactionStore: ObservableObject {
             merchant: merchant,
             isFixed: isFixed
         )
-        transactions.insert(tx, at: 0)
-        transactions.sort { $0.date > $1.date }
+        if showTutorialData {
+            _tutorialTransactions.insert(tx, at: 0)
+            _tutorialTransactions.sort { $0.date > $1.date }
+            transactions = _tutorialTransactions
+        } else {
+            _realTransactions.insert(tx, at: 0)
+            _realTransactions.sort { $0.date > $1.date }
+            transactions = _realTransactions
+        }
     }
 
     // MARK: - 수정
     func updateTransaction(_ updated: Transaction) {
-        guard let idx = transactions.firstIndex(where: { $0.id == updated.id }) else { return }
-        transactions[idx] = updated
-        transactions.sort { $0.date > $1.date }
+        if showTutorialData {
+            guard let idx = _tutorialTransactions.firstIndex(where: { $0.id == updated.id }) else { return }
+            _tutorialTransactions[idx] = updated
+            _tutorialTransactions.sort { $0.date > $1.date }
+            transactions = _tutorialTransactions
+        } else {
+            guard let idx = _realTransactions.firstIndex(where: { $0.id == updated.id }) else { return }
+            _realTransactions[idx] = updated
+            _realTransactions.sort { $0.date > $1.date }
+            transactions = _realTransactions
+        }
     }
 
     // MARK: - 삭제
     func deleteTransaction(id: UUID) {
-        transactions.removeAll { $0.id == id }
+        if showTutorialData {
+            _tutorialTransactions.removeAll { $0.id == id }
+            transactions = _tutorialTransactions
+        } else {
+            _realTransactions.removeAll { $0.id == id }
+            transactions = _realTransactions
+        }
     }
 
-    // MARK: - Seed Mock
-    private func seedMockIfNeeded() {
-        guard transactions.isEmpty else { return }
-
+    // MARK: - 튜토리얼 전용 Mock
+    private static func buildTutorialMockTransactions() -> [Transaction] {
+        let cal = MockData.usCalendar
+        var list: [Transaction] = []
         let today = Date()
         for offset in 0..<90 {
             guard let d = cal.date(byAdding: .day, value: -offset, to: today) else { continue }
-            let mock = MockData.transactions(for: d)
-            transactions.append(contentsOf: mock)
+            list.append(contentsOf: MockData.transactions(for: d))
         }
-
-        transactions.sort { $0.date > $1.date }
+        list.sort { $0.date > $1.date }
+        return list
     }
 }

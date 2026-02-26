@@ -8,7 +8,9 @@
 import SwiftUI
 
 struct ReportView: View {
+    @EnvironmentObject private var onboardingStore: OnboardingStore
     @ObservedObject var store: TransactionStore
+    @State private var onboardingFrames: [Int: [CGRect]] = [:]
 
     @State private var selectedMonth: Date = {
         let cal = MockData.usCalendar
@@ -25,35 +27,64 @@ struct ReportView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: Theme.spacingStandard) {
 
-                    VStack(spacing: 14) {
-                        DisclosureCard(
+                VStack(spacing: Theme.spacingLarge) {
+                    DisclosureCard(
                             title: "월간 리포트",
                             subtitle: monthlyHeaderSubtitle(for: selectedMonth),
                             isExpanded: $isMonthlyExpanded
                         ) {
                             MonthlyReportExpanded(store: store, selectedMonth: $selectedMonth)
                         }
+                        .onboardingFrame(stepId: 11)
 
                         DisclosureCard(
                             title: "고정지출",
                             subtitle: fixedHeaderSubtitle(groups: detectedFixedGroups),
                             isExpanded: $isFixedExpanded
                         ) {
-                            FixedCostsExpanded(groups: detectedFixedGroups)
+                            FixedCostsExpanded(groups: detectedFixedGroups, expandAll: onboardingStore.currentStep == 12)
                         }
+                        .onboardingFrame(stepId: 12)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 28)
+                .padding(.horizontal, Theme.screenHorizontal)
+                .padding(.top, Theme.screenTop + Theme.screenTopNavExtra)
+                .padding(.bottom, Theme.screenBottom)
             }
             .background(Color.white)
+            .onPreferenceChange(OnboardingFramePreferenceKey.self) { value in
+                onboardingFrames = value
+                onboardingStore.mergeOnboardingFrames(value)
+            }
+            .onAppear {
+                let step = onboardingStore.currentStep
+                if step == 11 {
+                    isMonthlyExpanded = true
+                    isFixedExpanded = false
+                } else if step == 12 {
+                    isMonthlyExpanded = false
+                    isFixedExpanded = true
+                }
+            }
+            .onChange(of: onboardingStore.currentStep) { _, step in
+                var t = SwiftUI.Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) {
+                    if step == 11 {
+                        isMonthlyExpanded = true
+                        isFixedExpanded = false
+                    } else if step == 12 {
+                        isMonthlyExpanded = false
+                        isFixedExpanded = true
+                    }
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("리포트")
-                        .font(.custom(Theme.fontLaundry, size: 26))
+                        .font(.custom(Theme.fontLaundry, size: Theme.titleSize))
                         .foregroundStyle(Theme.rose)
                 }
             }
@@ -99,7 +130,7 @@ struct MonthlyReportExpanded: View {
     @Binding var selectedMonth: Date
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Theme.spacingRegular) {
             MonthPickerRow(selectedMonth: $selectedMonth)
             MonthlySummaryMiniCard(store: store, month: selectedMonth)
             ChartPlaceholderCard(title: "카테고리별 비중 (준비중)")
@@ -122,7 +153,8 @@ struct MonthPickerRow: View {
             Spacer()
 
             Text(monthTitle(selectedMonth))
-                .font(.subheadline.weight(.semibold))
+                .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
+                .fontWeight(.semibold)
                 .foregroundStyle(Theme.text)
 
             Spacer()
@@ -133,8 +165,9 @@ struct MonthPickerRow: View {
                 Image(systemName: "chevron.right")
             }
         }
+        .font(.caption)
         .foregroundStyle(Theme.text)
-        .softDividerBox(corner: 8)
+        .softDividerBox(corner: Theme.cardCorner)
     }
 
     private func monthTitle(_ date: Date) -> String {
@@ -152,28 +185,30 @@ struct MonthlySummaryMiniCard: View {
     var body: some View {
         let s = summary()
 
-        return HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
+        return HStack(spacing: Theme.spacingStandard) {
+            VStack(alignment: .leading, spacing: Theme.spacingTight) {
                 Text("지출")
-                    .font(.caption)
+                    .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
                     .foregroundStyle(Theme.text)
                 Text(usd(s.expenseCents))
-                    .font(.headline)
+                    .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
+                    .fontWeight(.semibold)
                     .foregroundStyle(Theme.minus)
             }
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: Theme.spacingTight) {
                 Text("수입")
-                    .font(.caption)
+                    .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
                     .foregroundStyle(Theme.text)
                 Text(usd(s.incomeCents))
-                    .font(.headline)
+                    .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
+                    .fontWeight(.semibold)
                     .foregroundStyle(Theme.plus)
             }
         }
-        .cardStyle(bg: Theme.beige, corner: 8)
+        .cardStyle(bg: Theme.beige, corner: Theme.cardCorner)
     }
 
     private func summary() -> MonthlySummary {
@@ -196,31 +231,35 @@ struct MonthlySummaryMiniCard: View {
 
 struct FixedCostsExpanded: View {
     let groups: [RecurringGroup]
+    var expandAll: Bool = false
     @State private var expandedIDs: Set<UUID> = []
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Theme.spacingSmall + 4) {
             ForEach(groups) { g in
                 DisclosureGroup(
                     isExpanded: Binding(
-                        get: { expandedIDs.contains(g.id) },
+                        get: { expandAll || expandedIDs.contains(g.id) },
                         set: { isOn in
-                            if isOn { expandedIDs.insert(g.id) }
-                            else { expandedIDs.remove(g.id) }
+                            if !expandAll {
+                                if isOn { expandedIDs.insert(g.id) }
+                                else { expandedIDs.remove(g.id) }
+                            }
                         }
                     )
                 ) {
                     VStack(spacing: 0) {
                         ForEach(g.items) { item in
                             HStack {
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: Theme.spacingTight) {
                                     Text(item.title)
-                                        .font(.subheadline.weight(.semibold))
+                                        .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
+                                        .fontWeight(.semibold)
                                         .foregroundStyle(Theme.text)
 
                                     if let due = item.dueDay {
                                         Text("결제일(추정): 매월 \(due)일")
-                                            .font(.caption)
+                                            .font(.custom(Theme.fontLaundry, size: Theme.smallBodySize))
                                             .foregroundStyle(Theme.text.opacity(0.65))
                                     }
                                 }
@@ -228,10 +267,11 @@ struct FixedCostsExpanded: View {
                                 Spacer()
 
                                 Text(usd(item.amountCents))
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
+                                    .fontWeight(.semibold)
                                     .foregroundStyle(Theme.minus)
                             }
-                            .padding(.vertical, 10)
+                            .padding(.vertical, Theme.spacingSmall + 4)
 
                             Divider().opacity(0.25)
                         }
@@ -239,15 +279,17 @@ struct FixedCostsExpanded: View {
                 } label: {
                     HStack {
                         Text(g.title)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
+                            .fontWeight(.semibold)
                             .foregroundStyle(Theme.text)
                         Spacer()
                         Text(usd(g.totalCents))
-                            .font(.subheadline.weight(.semibold))
+                            .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
+                            .fontWeight(.semibold)
                             .foregroundStyle(Theme.minus)
                     }
                 }
-                .cardStyle(bg: Theme.beige, corner: 8)
+                .cardStyle(bg: Theme.beige, corner: Theme.cardCorner)
             }
         }
     }
@@ -266,23 +308,24 @@ struct DisclosureCard<Content: View>: View {
     let content: () -> Content
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Theme.spacingRegular) {
             Button {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
                     isExpanded.toggle()
                 }
             } label: {
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .center, spacing: Theme.spacingSmall + 4) {
+                    VStack(alignment: .leading, spacing: Theme.spacingTight) {
                         Text(title)
-                            .font(.custom(Theme.fontLaundry, size: 16))
+                            .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
                             .foregroundStyle(Theme.text)
                         Text(subtitle)
-                            .font(.caption)
+                            .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
                             .foregroundStyle(Theme.text.opacity(0.65))
                     }
                     Spacer()
                     Image(systemName: "chevron.down")
+                        .font(.body.weight(.semibold))
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         .foregroundStyle(Theme.text)
                 }
@@ -294,52 +337,55 @@ struct DisclosureCard<Content: View>: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .cardStyle(bg: Theme.beige, corner: 8)
+        .cardStyle(bg: Theme.beige, corner: Theme.cardCorner)
     }
 }
 
 struct ChartPlaceholderCard: View {
     let title: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.spacingSmall + 4) {
             Text(title)
-                .font(.custom(Theme.fontLaundry, size: 16))
+                .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
                 .foregroundStyle(Theme.text)
 
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous)
                 .fill(Color.clear)
-                .frame(height: 180)
+                .frame(height: Theme.chartPlaceholderHeight)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.black.opacity(0.07))
+                    RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous)
+                        .stroke(Color.black.opacity(Theme.strokeOpacityBorder))
                 )
                 .overlay(
-                    VStack(spacing: 6) {
-                        Image(systemName: "chart.pie").foregroundStyle(Theme.text.opacity(0.6))
-                        Text("차트 연결 예정")
+                    VStack(spacing: Theme.spacingTight) {
+                        Image(systemName: "chart.pie")
                             .font(.caption)
+                            .foregroundStyle(Theme.text.opacity(0.6))
+                        Text("차트 연결 예정")
+                            .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
                             .foregroundStyle(Theme.text.opacity(0.6))
                     }
                 )
         }
-        .cardStyle(bg: Theme.beige, corner: 8)
+        .cardStyle(bg: Theme.beige, corner: Theme.cardCorner)
     }
 }
 
 struct AIFeedbackMiniCard: View {
     let text: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.spacingSmall + 4) {
             Text("AI 소비 총평")
-                .font(.custom(Theme.fontLaundry, size: 16))
+                .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
                 .foregroundStyle(Theme.text)
 
             Text(text)
-                .font(.subheadline)
+                .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
                 .foregroundStyle(Theme.text.opacity(0.8))
-                .softDividerBox(corner: 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .softDividerBox(corner: Theme.cardCorner)
         }
-        .cardStyle(bg: Theme.beige, corner: 8)
+        .cardStyle(bg: Theme.beige, corner: Theme.cardCorner)
     }
 }
 
