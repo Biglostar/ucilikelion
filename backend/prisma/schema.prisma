@@ -50,6 +50,8 @@ model User {
   nickname   String
   roastLevel RoastLevel @default(MILD)
 
+  plaidAccessToken String? // Store the permanent key here
+
   goals        Goal[]
   transactions Transaction[]
 
@@ -70,7 +72,7 @@ model Goal {
   icon  String? // "coffee", "bus"
 
   // given category from Plaid and redefined category mapping needed
-  category String // 
+  category String
 
   monthlyBudgetCents Int
   currentSpentCents  Int @default(0)
@@ -117,11 +119,11 @@ model Transaction {
   plaidTxnId String? @unique
   accountId  String? // Plaid account id (optional)
 
-  title       String // "Starbucks"", "Uber", "Salary"
+  title       String // "Starbucks", "Uber", "Salary"
   amountCents Int // always > 0
   type        TransactionType
 
-  category   String // "cafe", "transport", "grocery" 등
+  category   String // "cafe", "transport", "grocery"
   occurredAt DateTime
 
   isFixed Boolean @default(false)
