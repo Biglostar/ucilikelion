@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma";
 import { generateNaggingMessage } from "../services/aiService";
-
+import { TransactionType } from '@prisma/client';
 
 export async function getDashboardData(req: Request, res: Response) {
   try {
@@ -104,3 +104,36 @@ export async function getDashboardData(req: Request, res: Response) {
     return res.status(500).json({ error: "Failed to fetch dashboard data" });
   }
 }
+
+// --- REUSABLE HELPER FUNCTION ---
+// This handles the math and database updates, without needing req/res!
+export const updateUserBudgets = async (userId: string) => {
+  const activeGoals = await prisma.goal.findMany({
+    where: { userId: userId, status: 'ACTIVE' }
+  });
+
+  let updatedCount = 0;
+
+  for (const goal of activeGoals) {
+    const spending = await prisma.transaction.aggregate({
+      _sum: { amountCents: true },
+      where: {
+        userId: userId,
+        category: goal.category, 
+        type: TransactionType.EXPENSE,
+        occurredAt: { gte: goal.startDate, lte: goal.endDate }
+      }
+    });
+
+    const totalSpent = spending._sum.amountCents || 0;
+
+    await prisma.goal.update({
+      where: { id: goal.id },
+      data: { currentSpentCents: totalSpent }
+    });
+
+    updatedCount++;
+  }
+  
+  return updatedCount; // Just return the number of updated goals
+};
