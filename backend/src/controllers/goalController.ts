@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from "../prisma";
-import { generateAiBudgetAnalysis } from '../services/aiService';
-import { TransactionType } from '@prisma/client';
+// import { generateAiBudgetAnalysis } from '../services/aiService';
+// import { TransactionType } from '@prisma/client';
 
 export async function getGoals(req: Request, res: Response) {
   try {

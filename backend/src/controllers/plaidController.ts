@@ -4,7 +4,7 @@ import { prisma } from '../prisma';
 import { CountryCode, Products } from 'plaid';
 import { TransactionType } from '@prisma/client';
 import { mapPlaidCategory } from '../utils/categoryMapper';
-import { updateUserBudgets } from './goalController';
+import { updateUserBudgets } from './dashboardController';
 
 // Dev only
 import { Products as PlaidProducts } from 'plaid';
