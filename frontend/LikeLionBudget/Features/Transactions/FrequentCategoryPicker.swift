@@ -39,15 +39,21 @@ struct FrequentCategoryPicker: View {
 
     private let fallbackTop5: [BudgetCategory] = [.grocery, .food, .cafe, .transportation, .utilities]
 
-    var body: some View {
-        let chips = recent.list().isEmpty ? fallbackTop5 : Array(recent.list().prefix(5))
+    private var displayChips: [BudgetCategory] {
+        let recentList = recent.list()
+        var result = Array(recentList.prefix(5))
+        for c in fallbackTop5 where result.count < 5 && !result.contains(c) {
+            result.append(c)
+        }
+        return Array(result.prefix(5))
+    }
 
-        FlowLayout(horizontalSpacing: 10, verticalSpacing: 10) {
-            if chips.count > 0 { chip(chips[0]) }
-            if chips.count > 1 { chip(chips[1]) }
-            if chips.count > 2 { chip(chips[2]) }
-            if chips.count > 3 { chip(chips[3]) }
-            if chips.count > 4 { chip(chips[4]) }
+    var body: some View {
+        let chips = displayChips
+        let spacing = Theme.spacingSmall + Theme.spacingTight
+
+        FlowLayout(horizontalSpacing: spacing, verticalSpacing: spacing) {
+            ForEach(chips, id: \.self) { c in chip(c) }
             wholeButton
         }
         .sheet(isPresented: $showAll) {
@@ -57,7 +63,7 @@ struct FrequentCategoryPicker: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
             .presentationBackground(.white)
-            .presentationCornerRadius(18)
+            .presentationCornerRadius(Theme.sheetCornerRadius)
         }
         .onChange(of: selected) { _, newValue in
             recent.push(newValue)
@@ -66,14 +72,14 @@ struct FrequentCategoryPicker: View {
 
     private var wholeButton: some View {
         Button { showAll = true } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.spacingMedium) {
                 Text("📚")
-                    .font(.system(size: 16))
+                    .font(.system(size: Theme.bodySize))
                 Text("전체")
-                    .font(.custom(Theme.fontLaundry, size: 15))
+                    .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 14)
+            .padding(.vertical, Theme.spacingRegular)
+            .padding(.horizontal, Theme.cardPadding)
             .background(Theme.beige)
             .foregroundStyle(Theme.text)
             .clipShape(Capsule())
@@ -83,21 +89,20 @@ struct FrequentCategoryPicker: View {
         .fixedSize(horizontal: true, vertical: true)
     }
 
-    // MARK: - Chip UI (글자 길이에 맞춘 크기, 아기자기한 배치)
     private func chip(_ c: BudgetCategory) -> some View {
         Button {
             selected = c
             recent.push(c)
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.spacingMedium) {
                 Text(c.emoji)
-                    .font(.system(size: 16))
+                    .font(.system(size: Theme.bodySize))
                 Text(c.displayNameKR)
-                    .font(.custom(Theme.fontLaundry, size: 15))
+                    .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
                     .lineLimit(1)
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 14)
+            .padding(.vertical, Theme.spacingRegular)
+            .padding(.horizontal, Theme.cardPadding)
             .background(selected == c ? Theme.progressFill : Theme.beige)
             .foregroundStyle(selected == c ? .white : Theme.text)
             .clipShape(Capsule())

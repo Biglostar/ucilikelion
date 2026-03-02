@@ -12,6 +12,8 @@ struct DayDetailSheet: View {
     let date: Date
     @ObservedObject var store: TransactionStore
 
+    // MARK: - State & Layout
+
     @State private var onboardingFrames: [Int: [CGRect]] = [:]
 
     private var cardCorner: CGFloat { Theme.cardCorner }
@@ -52,6 +54,8 @@ struct DayDetailSheet: View {
     private var totalExpenseCents: Int {
         transactions.filter { $0.amountCents < 0 }.reduce(0) { $0 + abs($1.amountCents) }
     }
+
+    // MARK: - Body
 
     private var netCents: Int {
         transactions.reduce(0) { $0 + $1.amountCents }
@@ -152,7 +156,7 @@ struct DayDetailSheet: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(.white)
-                    .presentationCornerRadius(0)
+                    .presentationCornerRadius(Theme.sheetCornerRadius)
                 if didOpenAddForOnboarding {
                     Color.clear
                         .contentShape(Rectangle())
@@ -169,7 +173,7 @@ struct DayDetailSheet: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.white)
-                .presentationCornerRadius(0)
+                .presentationCornerRadius(Theme.sheetCornerRadius)
         }
     }
 

@@ -19,6 +19,8 @@ struct PlaidIntroView: View {
     @Environment(\.dismiss) private var dismiss
     var onContinue: (() -> Void)?
 
+    // MARK: - Body
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -41,6 +43,8 @@ struct PlaidIntroView: View {
         .background(Color.white)
         .ignoresSafeArea(.all)
     }
+
+    // MARK: - Subviews (header / logo / featureSection / continueButton)
 
     private var header: some View {
         HStack {

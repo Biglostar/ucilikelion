@@ -7,6 +7,8 @@
 
 import Foundation
 
+// MARK: - GoalType / Goal (목표 모델)
+
 enum GoalType: String, Codable {
     case reduceSpending
     case saveMoney

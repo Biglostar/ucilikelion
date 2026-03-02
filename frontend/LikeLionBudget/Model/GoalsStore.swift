@@ -17,16 +17,25 @@ final class GoalsStore: ObservableObject {
 
     private var _realGoals: [Goal] = []
     private var _tutorialGoals: [Goal] = []
+    private let api = APIClient()
     private weak var onboardingStore: OnboardingStore?
     private var cancellable: AnyCancellable?
 
     private let key = "LikeLionBudget.Goals.v1"
 
+    // MARK: - Init
+
     init() {
         _realGoals = Self.load(key: key) ?? []
         _tutorialGoals = Self.tutorialSeedGoals
         goals = _realGoals
+
+        Task {
+            await loadRemoteGoalsIfNeeded()
+        }
     }
+
+    // MARK: - Onboarding
 
     func bindOnboarding(_ store: OnboardingStore) {
         guard onboardingStore == nil else { return }
@@ -52,6 +61,30 @@ final class GoalsStore: ObservableObject {
         }
     }
 
+    // MARK: - Remote Load / Refresh
+
+    private func loadRemoteGoalsIfNeeded() async {
+        guard !showTutorialData else { return }
+        do {
+            let backendGoals = try await api.fetchGoals()
+            let mapped = backendGoals.map { dto in
+                Goal(
+                    title: dto.title,
+                    type: .reduceSpending,
+                    isSelected: true,
+                    isNotificationsOn: true,
+                    statusText: dto.memo ?? "",
+                    category: dto.category
+                )
+            }
+            _realGoals = mapped
+            goals = _realGoals
+            saveRealGoals()
+        } catch {
+            print("⚠️ Failed to load goals from backend:", error)
+        }
+    }
+
     private func saveRealGoals() {
         do {
             let data = try JSONEncoder().encode(_realGoals)
@@ -60,6 +93,9 @@ final class GoalsStore: ObservableObject {
             print("⚠️ Goals save failed:", error)
         }
     }
+
+    // MARK: - Public Access (selectedGoals / goal / binding)
+
     var selectedGoals: [Goal] {
         goals.filter { $0.isSelected }
     }
@@ -75,6 +111,8 @@ final class GoalsStore: ObservableObject {
             set: { [weak self] in self?.updateGoal($0) }
         )
     }
+
+    // MARK: - Update / Delete / Toggle
 
     func updateGoal(_ goal: Goal) {
         if showTutorialData {
@@ -130,6 +168,8 @@ final class GoalsStore: ObservableObject {
         }
     }
 
+    // MARK: - Insert (Create) + Backend POST
+
     func insertGoal(_ goal: Goal) {
         if showTutorialData {
             _tutorialGoals.insert(goal, at: 0)
@@ -138,6 +178,30 @@ final class GoalsStore: ObservableObject {
             _realGoals.insert(goal, at: 0)
             goals = _realGoals
             saveRealGoals()
+
+            Task {
+                await postNewGoalToBackend(goal)
+            }
+        }
+    }
+
+    private func postNewGoalToBackend(_ goal: Goal) async {
+        let cal = Calendar.current
+        guard let start = cal.date(from: cal.dateComponents([.year, .month], from: Date())),
+              let end = cal.date(byAdding: DateComponents(month: 1, day: -1), to: start) else { return }
+        do {
+            _ = try await api.createGoal(
+                title: goal.title,
+                memo: goal.statusText.isEmpty ? nil : goal.statusText,
+                icon: nil,
+                category: goal.category,
+                monthlyBudgetCents: 0,
+                startDate: start,
+                endDate: end
+            )
+            await loadRemoteGoalsIfNeeded()
+        } catch {
+            print("⚠️ Failed to create goal on backend:", error)
         }
     }
 

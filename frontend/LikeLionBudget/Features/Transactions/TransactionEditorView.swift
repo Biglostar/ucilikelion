@@ -18,6 +18,8 @@ struct TransactionEditorView: View {
     @ObservedObject var store: TransactionStore
     @Environment(\.dismiss) private var dismiss
 
+    // MARK: - State
+
     @State private var date: Date
     @State private var title: String
     @State private var amountText: String
@@ -60,6 +62,8 @@ struct TransactionEditorView: View {
         }
     }
 
+    // MARK: - Body
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -90,15 +94,22 @@ struct TransactionEditorView: View {
                 .padding(.top, Theme.screenTop)
                 .padding(.bottom, Theme.screenBottom)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(Color.white)
-
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("뒤로") { dismiss() }
                         .foregroundStyle(Theme.text)
                 }
-
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button { hideKeyboard() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Theme.progressFill)
+                    }
+                }
                 ToolbarItem(placement: .principal) {
                     Text(koDateTitle(date))
                         .font(.custom(Theme.fontLaundry, size: 22))
@@ -130,6 +141,7 @@ struct TransactionEditorView: View {
 
                 TextField("예: 커피", text: $title)
                     .textInputAutocapitalization(.words)
+                    .foregroundStyle(Color.black)
 
                 Divider().opacity(0.35)
             }
@@ -142,6 +154,7 @@ struct TransactionEditorView: View {
                 HStack {
                     TextField("예: 6.50", text: $amountText)
                         .keyboardType(.decimalPad)
+                        .foregroundStyle(Color.black)
                     Spacer()
                     Text("USD")
                         .foregroundStyle(Theme.text)
@@ -283,30 +296,30 @@ private struct ExpenseIncomeSegment: View {
     @Binding var isExpense: Bool
 
     var body: some View {
-        ZStack {
-            Capsule()
-                .fill(Theme.beige)
+        GeometryReader { geo in
+            let pad = Theme.spacingTight
+            let segW = (geo.size.width - pad * 2) / 2
 
-            HStack(spacing: 0) {
-                segmentButton(
-                    title: "지출",
-                    selected: isExpense
-                ) {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                        isExpense = true
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Theme.beige)
+
+                Capsule()
+                    .fill(Theme.progressFill)
+                    .frame(width: segW, height: geo.size.height - pad * 2)
+                    .offset(x: pad + (isExpense ? 0 : segW))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isExpense)
+
+                HStack(spacing: 0) {
+                    segmentButton(title: "지출", selected: isExpense) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isExpense = true }
+                    }
+                    segmentButton(title: "수입", selected: !isExpense) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isExpense = false }
                     }
                 }
-
-                segmentButton(
-                    title: "수입",
-                    selected: !isExpense
-                ) {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                        isExpense = false
-                    }
-                }
+                .padding(pad)
             }
-            .padding(Theme.spacingTight)
         }
         .frame(height: 50)
         .overlay(
@@ -315,7 +328,6 @@ private struct ExpenseIncomeSegment: View {
         )
     }
 
-    // MARK: - Segment Button
     private func segmentButton(
         title: String,
         selected: Bool,
@@ -325,10 +337,7 @@ private struct ExpenseIncomeSegment: View {
             Text(title)
                 .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(
-                    Capsule()
-                        .fill(selected ? Theme.progressFill : Color.clear)
-                )
+                .contentShape(Rectangle())
                 .foregroundStyle(selected ? .white : Theme.text)
         }
         .buttonStyle(.plain)

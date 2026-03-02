@@ -38,7 +38,7 @@ extension View {
     }
 }
 
-// MARK: 레이아웃
+// MARK: - 레이아웃 상수 (OnboardingLayoutLock)
 
 private enum OnboardingLayoutLock {
     static let referenceScreenWidth: CGFloat = 393
@@ -172,10 +172,11 @@ private enum OnboardingLayoutLock {
     static let step7PaddingB: CGFloat = 16
     static let step9Padding: CGFloat = 12
     static let step10Padding: CGFloat = 12
+    static let step12Padding: CGFloat = 16  // 고정지출 카드 하이라이트 갭
     static let step2SpeechBubbleCornerRadius: CGFloat = 22
 }
 
-// MARK: - Dim + 컴포넌트 영역만 구멍 (글로벌→로컬 변환 후 RoundedRectangle)
+// MARK: - Dim + 컴포넌트 영역만 구멍
 
 // MARK: - 하이라이트 주변 플로팅 툴팁 (작은 화살표 + 설명)
 
@@ -261,6 +262,8 @@ private struct Step6ArrowShape: Shape {
     }
 }
 
+// MARK: - 곡선 화살표 (일반 툴팁)
+
 private struct CurvedArrowShape: Shape {
     var start: CGPoint
     var end: CGPoint
@@ -299,6 +302,8 @@ private struct CurvedArrowShape: Shape {
     }
 }
 
+// MARK: - 툴팁 위치/화살표 계산 헬퍼
+
 private func expandedHighlight(_ r: CGRect, gap: CGFloat) -> CGRect {
     r.insetBy(dx: -gap, dy: -gap)
 }
@@ -306,6 +311,8 @@ private func expandedHighlight(_ r: CGRect, gap: CGFloat) -> CGRect {
 private func textRect(cx: CGFloat, cy: CGFloat, halfW: CGFloat, halfH: CGFloat) -> CGRect {
     CGRect(x: cx - halfW, y: cy - halfH, width: halfW * 2, height: halfH * 2)
 }
+
+// MARK: - 툴팁 레이아웃 (Zone + compute)
 
 private struct TooltipLayout {
     let zone: Zone
@@ -485,6 +492,8 @@ private struct TooltipLayout {
         return TooltipLayout(zone: .right, textCenterX: cx, textCenterY: cy, arrowStart: aStart, arrowEnd: end)
     }
 }
+
+// MARK: - 플로팅 툴팁 뷰 (메시지 + 화살표 + 좌우 탭)
 
 private struct FloatingTooltipView: View {
     let message: String
@@ -678,7 +687,7 @@ private struct FloatingTooltipView: View {
     }
 }
 
-// MARK: - Step 6
+// MARK: - Step 6 원형 구멍 / 히트테스트
 
 private struct OverlayHitTestShape: Shape {
     var holeCenter: CGPoint?
@@ -694,7 +703,7 @@ private struct OverlayHitTestShape: Shape {
     }
 }
 
-// MARK: - 메인 오버레이 (dim + 구멍 + 툴팁)
+// MARK: - 메인 오버레이 뷰 (OnboardingOverlayView)
 
 struct OnboardingOverlayView: View {
     @ObservedObject var store: OnboardingStore
@@ -759,6 +768,8 @@ struct OnboardingOverlayView: View {
         .ignoresSafeArea()
         .allowsHitTesting(true)
     }
+
+    // MARK: - Dim 레이어 (구멍 유효성 + cutout 분기)
 
     private static func isHighlightValidForCutout(step: Int, highlightFrame: CGRect) -> Bool {
         if step == 6 { return false }
@@ -834,6 +845,10 @@ struct OnboardingOverlayView: View {
                     let dy = OnboardingLayoutLock.step11HighlightOffsetY * s
                     return raw.insetBy(dx: -p, dy: -p).offsetBy(dx: 0, dy: dy)
                 }
+                if step == 12 {
+                    let p = OnboardingLayoutLock.step12Padding * s
+                    return raw.insetBy(dx: -p, dy: -p)
+                }
                 return raw
             }()
             ZStack {
@@ -859,6 +874,8 @@ struct OnboardingOverlayView: View {
         .ignoresSafeArea()
     }
 
+    // MARK: - Step 2 말풍선 구멍 (버블 + 꼬리 2개)
+
     private func speechBubbleCutout(bubbleLocal: CGRect, tail1Local: CGRect, tail2Local: CGRect) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: OnboardingLayoutLock.step2SpeechBubbleCornerRadius, style: .continuous)
@@ -879,6 +896,8 @@ struct OnboardingOverlayView: View {
         }
     }
 
+    // MARK: - Step 6 원형 구멍
+
     private func circleCutout(localRect: CGRect) -> some View {
         let side = max(1, min(localRect.width, localRect.height))
         return Circle()
@@ -887,6 +906,8 @@ struct OnboardingOverlayView: View {
             .position(x: localRect.midX, y: localRect.midY)
             .blendMode(.destinationOut)
     }
+
+    // MARK: - 일반 컴포넌트 구멍 (RoundedRectangle)
 
     @ViewBuilder
     private func componentCutout(localRect: CGRect, step: Int) -> some View {

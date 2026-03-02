@@ -7,6 +7,8 @@
 
 import SwiftUI
 
+// MARK: - GoalSheetItem
+
 private struct GoalSheetItem: Identifiable {
     let goal: Goal
     var id: UUID { goal.id }
@@ -15,6 +17,9 @@ private struct GoalSheetItem: Identifiable {
 struct GoalsListView: View {
     @EnvironmentObject private var onboardingStore: OnboardingStore
     @ObservedObject var goalsStore: GoalsStore
+
+    // MARK: - State
+
     @State private var showAdd: Bool = false
     @State private var goalToEdit: GoalSheetItem? = nil
     @State private var didOpenAddGoalForOnboarding: Bool = false
@@ -24,17 +29,19 @@ struct GoalsListView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: Theme.spacingStandard) {
-                    VStack(spacing: Theme.spacingRegular) {
-                        ForEach(Array(goalsStore.goals.enumerated()), id: \.element.id) { index, goal in
-                            goalRow(goal: goalsStore.binding(for: goal.id) ?? .constant(goal), isFirst: index == 0)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    goalToEdit = GoalSheetItem(goal: goal)
-                                }
+                    if !goalsStore.goals.isEmpty {
+                        VStack(spacing: Theme.spacingRegular) {
+                            ForEach(Array(goalsStore.goals.enumerated()), id: \.element.id) { index, goal in
+                                goalRow(
+                                    goal: goalsStore.binding(for: goal.id) ?? .constant(goal),
+                                    isFirst: index == 0,
+                                    onTapToEdit: { goalToEdit = GoalSheetItem(goal: goal) }
+                                )
+                            }
                         }
+                        .llContainer()
+                        .onboardingFrame(stepId: 8)
                     }
-                    .llContainer()
-                    .onboardingFrame(stepId: 8)
 
                     Button {
                         showAdd = true
@@ -87,6 +94,7 @@ struct GoalsListView: View {
                 ZStack(alignment: .bottom) {
                     AddGoalView(goalsStore: goalsStore)
                         .presentationDetents([.large])
+                        .presentationCornerRadius(Theme.sheetCornerRadius)
                     if didOpenAddGoalForOnboarding {
                         Color.clear
                             .contentShape(Rectangle())
@@ -101,34 +109,42 @@ struct GoalsListView: View {
             .sheet(item: $goalToEdit) { item in
                 AddGoalView(goalsStore: goalsStore, editingGoal: item.goal)
                     .presentationDetents([.large])
+                    .presentationCornerRadius(Theme.sheetCornerRadius)
             }
         }
     }
 
+    // MARK: - Subviews (goalRow)
+
     @ViewBuilder
-    private func goalRow(goal: Binding<Goal>, isFirst: Bool) -> some View {
+    private func goalRow(goal: Binding<Goal>, isFirst: Bool, onTapToEdit: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
+            Button(action: onTapToEdit) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.progressBG)
+                            .frame(width: 36, height: 36)
 
-            ZStack {
-                Circle()
-                    .fill(Theme.progressBG)
-                    .frame(width: 36, height: 36)
+                        Text(goal.wrappedValue.category.emoji)
+                            .font(.system(size: 18))
+                    }
 
-                Text(goal.wrappedValue.category.emoji)
-                    .font(.system(size: 18))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(goal.wrappedValue.title)
+                            .font(.custom(Theme.fontLaundry, size: 16))
+                            .foregroundStyle(Theme.text)
+
+                        Text(goal.wrappedValue.category.displayNameKR)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(goal.wrappedValue.title)
-                    .font(.custom(Theme.fontLaundry, size: 16))
-                    .foregroundStyle(Theme.text)
-
-                Text(goal.wrappedValue.category.displayNameKR)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
+            .buttonStyle(.plain)
 
             Toggle("", isOn: combinedToggleBinding(for: goal))
                 .labelsHidden()

@@ -16,15 +16,22 @@ struct HomeView: View {
     var aiSpeechMent: String? = nil
     var characterSpendingLevel: Int? = nil
 
+    // MARK: - State
+
     @State private var selectedGoalID: UUID? = nil
     @State private var month: Date = Date()
     @State private var selectedDayForSheet: SelectedDay? = nil
     @State private var onboardingFrames: [Int: [CGRect]] = [:]
     @State private var tutorialLayoutSeed: Int = 0
     @State private var showOverlayForStep1: Bool = false
+    @State private var dashboard: APIClient.DashboardResponse? = nil
+    @State private var selectedDashboardGoalIndex: Int = 0
 
     private var effectiveCharacterLevel: Int {
-        characterSpendingLevel ?? 0
+        if let d = dashboard {
+            return Self.characterLevel(from: d.character.status)
+        }
+        return characterSpendingLevel ?? 0
     }
 
     private var shouldShowStepOverlay: Bool {
@@ -32,59 +39,18 @@ struct HomeView: View {
         return (2...5).contains(step) || (step == 1 && showOverlayForStep1)
     }
 
+    // MARK: - Body
+
     var body: some View {
         ZStack {
             Theme.beige.ignoresSafeArea()
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(spacing: 0) {
-                        headerSection
-                            .background(Theme.beige)
-                            .id("onboardingTop")
-
-                        VStack(spacing: Theme.Home.gapGoalToCalendar) {
-                            VStack(spacing: Theme.Home.gapInsideGoalPage) {
-                                GoalProgressPagerView(
-                                    goals: goalsStore.selectedGoals,
-                                    selectedGoalID: $selectedGoalID,
-                                    store: store,
-                                    gapInsidePage: Theme.Home.gapInsideGoalPage
-                                )
-                                GoalRemainingLabel(
-                                    goals: goalsStore.selectedGoals,
-                                    selectedGoalID: selectedGoalID,
-                                    store: store
-                                )
-                            }
-                            .onboardingFrame(stepId: 4)
-
-                            MonthCalendarView(month: $month, store: store, selectedDay: $selectedDayForSheet)
-                                .padding(.vertical, Theme.Home.calendarVerticalPadding)
-                                .onboardingFrame(stepId: 5)
-                                .id("onboardingCalendar")
-                        }
-                        .padding(.horizontal, Theme.Home.goalCalendarHorizontal)
-                        .padding(.top, Theme.Home.gapHeaderToGoalBlock)
-                        .padding(.bottom, Theme.screenBottom)
-                        .background(Color.white)
-                    }
-                    .id(tutorialLayoutSeed)
+                    homeScrollContent
                 }
                 .onChange(of: onboardingStore.currentStep) { _, step in
-                    if step == 5 {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            withAnimation(.easeInOut(duration: 0.4)) {
-                                proxy.scrollTo("onboardingCalendar", anchor: .center)
-                            }
-                        }
-                    } else if (1...4).contains(step) {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                proxy.scrollTo("onboardingTop", anchor: .top)
-                            }
-                        }
-                    }
+                    handleOnboardingStepChange(step: step, proxy: proxy)
                 }
             }
         }
@@ -106,6 +72,7 @@ struct HomeView: View {
             if selectedGoalID == nil {
                 selectedGoalID = goalsStore.selectedGoals.first?.id
             }
+            loadDashboard()
         }
         .overlay {
             if onboardingStore.isTutorialActive && onboardingStore.currentStep == 0 {
@@ -137,6 +104,68 @@ struct HomeView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.white)
+                .presentationCornerRadius(Theme.sheetCornerRadius)
+        }
+    }
+
+    private var homeScrollContent: some View {
+        VStack(spacing: 0) {
+            headerSection
+                .background(Theme.beige)
+                .id("onboardingTop")
+
+            VStack(spacing: Theme.Home.gapGoalToCalendar) {
+                VStack(spacing: Theme.Home.gapInsideGoalPage) {
+                    if let d = dashboard, !d.activeGoals.isEmpty {
+                        DashboardGoalPagerView(
+                            activeGoals: d.activeGoals,
+                            selectedIndex: $selectedDashboardGoalIndex
+                        )
+                        DashboardGoalRemainingLabel(
+                            goal: d.activeGoals[selectedDashboardGoalIndex]
+                        )
+                    } else {
+                        GoalProgressPagerView(
+                            goals: goalsStore.selectedGoals,
+                            selectedGoalID: $selectedGoalID,
+                            store: store,
+                            gapInsidePage: Theme.Home.gapInsideGoalPage
+                        )
+                        GoalRemainingLabel(
+                            goals: goalsStore.selectedGoals,
+                            selectedGoalID: selectedGoalID,
+                            store: store
+                        )
+                    }
+                }
+                .onboardingFrame(stepId: 4)
+
+                MonthCalendarView(month: $month, store: store, selectedDay: $selectedDayForSheet)
+                    .padding(.vertical, Theme.Home.calendarVerticalPadding)
+                    .onboardingFrame(stepId: 5)
+                    .id("onboardingCalendar")
+            }
+            .padding(.horizontal, Theme.Home.goalCalendarHorizontal)
+            .padding(.top, Theme.Home.gapHeaderToGoalBlock)
+            .padding(.bottom, Theme.screenBottom)
+            .background(Color.white)
+        }
+        .id(tutorialLayoutSeed)
+    }
+
+    private func handleOnboardingStepChange(step: Int, proxy: ScrollViewProxy) {
+        if step == 5 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    proxy.scrollTo("onboardingCalendar", anchor: .center)
+                }
+            }
+        } else if (1...4).contains(step) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    proxy.scrollTo("onboardingTop", anchor: .top)
+                }
+            }
         }
     }
 
@@ -231,12 +260,17 @@ struct HomeView: View {
     }
 
     private var speechTextMonthOnly: String {
-        aiSpeechMent ?? "뭐함? 개거지\n진짜 망했네"
+        if let text = dashboard?.character.bubbleText, !text.isEmpty { return text }
+        return aiSpeechMent ?? "뭐함? 개거지\n진짜 망했네"
     }
 
     // MARK: - Month spend text
 
     private func totalSpendTextThisMonth() -> String {
+        if let d = dashboard {
+            return Money.usdSignedString(fromCents: -d.summary.totalMonthSpentCents)
+                .replacingOccurrences(of: "-", with: "")
+        }
         let cal = MockData.usCalendar
         let now = Date()
         guard let interval = cal.dateInterval(of: .month, for: now) else { return "0" }
@@ -248,6 +282,28 @@ struct HomeView: View {
 
         return Money.usdSignedString(fromCents: -spendCents)
             .replacingOccurrences(of: "-", with: "")
+    }
+
+    private func loadDashboard() {
+        Task {
+            do {
+                let d = try await APIClient().fetchDashboard()
+                await MainActor.run { dashboard = d }
+            } catch {
+                // 오프라인/백엔드 미동작 시 로컬 계산 유지
+            }
+        }
+    }
+
+    private static func characterLevel(from status: String) -> Int {
+        switch status.uppercased() {
+        case "RICH": return 0
+        case "STABLE": return 1
+        case "SURVIVING": return 2
+        case "DESPERATE": return 3
+        case "BROKE": return 4
+        default: return 1
+        }
     }
 }
 
@@ -409,7 +465,7 @@ private struct GoalRemainingLabel: View {
         }
     }
 
-    /// 예산 (cents). 현재 로컬 계산 → 추후 BE 연동 시 API 값으로 교체
+    /// 예산 (cents). Dashboard activeGoals 없을 때만 사용. 있으면 API(DashboardActiveGoal.budget) 사용.
     private func budgetCents(for category: BudgetCategory) -> Int {
         switch category {
         case .rent: return 1800 * 100
@@ -421,7 +477,7 @@ private struct GoalRemainingLabel: View {
         }
     }
 
-    /// 이번 달 해당 카테고리 지출 (cents). 현재 TransactionStore 기반 → 추후 BE 연동 시 API 값으로 교체
+    /// 이번 달 해당 카테고리 지출 (cents). Dashboard 없을 때만 사용. 있으면 API(DashboardActiveGoal.spent) 사용.
     private func spentCentsThisMonth(for category: BudgetCategory) -> Int {
         let cal = MockData.usCalendar
         guard let interval = cal.dateInterval(of: .month, for: Date()) else { return 0 }
@@ -430,6 +486,127 @@ private struct GoalRemainingLabel: View {
             .filter { $0.amountCents < 0 }
             .filter { $0.category == category }
             .reduce(0) { $0 + abs($1.amountCents) }
+    }
+
+    private func usd(_ cents: Int) -> String {
+        Money.usdSignedString(fromCents: cents).replacingOccurrences(of: "+", with: "")
+    }
+}
+
+// MARK: - Dashboard active goals (API 데이터 사용)
+
+private struct DashboardGoalPagerView: View {
+    let activeGoals: [APIClient.DashboardActiveGoal]
+    @Binding var selectedIndex: Int
+
+    private let barHeight: CGFloat = 32
+    private var goalTitleColor: Color { Theme.text }
+
+    var body: some View {
+        VStack(spacing: Theme.Home.gapInsideGoalPage) {
+            HStack {
+                Button { step(-1) } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline)
+                        .foregroundStyle(goalTitleColor)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 10)
+                }
+                .buttonStyle(.plain)
+                .disabled(activeGoals.count <= 1)
+                .opacity(activeGoals.count <= 1 ? 0.3 : 1)
+
+                Spacer()
+
+                Text(activeGoals.isEmpty ? "목표 없음" : activeGoals[selectedIndex].title)
+                    .font(.custom(Theme.fontLaundry, size: 18))
+                    .foregroundStyle(goalTitleColor)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Button { step(1) } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.headline)
+                        .foregroundStyle(goalTitleColor)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 10)
+                }
+                .buttonStyle(.plain)
+                .disabled(activeGoals.count <= 1)
+                .opacity(activeGoals.count <= 1 ? 0.3 : 1)
+            }
+
+            TabView(selection: Binding(
+                get: { selectedIndex },
+                set: { selectedIndex = $0 }
+            )) {
+                ForEach(Array(activeGoals.enumerated()), id: \.element.id) { index, goal in
+                    DashboardGoalProgressPage(goal: goal)
+                        .tag(index)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: 44)
+        }
+        .onAppear {
+            if selectedIndex >= activeGoals.count, !activeGoals.isEmpty { selectedIndex = 0 }
+        }
+    }
+
+    private func step(_ delta: Int) {
+        guard activeGoals.count > 1 else { return }
+        let newIndex = (selectedIndex + delta + activeGoals.count) % activeGoals.count
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+            selectedIndex = newIndex
+        }
+    }
+}
+
+private struct DashboardGoalProgressPage: View {
+    let goal: APIClient.DashboardActiveGoal
+    private let barHeight: CGFloat = 32
+    @State private var animatedProgress: Double = 0
+
+    var body: some View {
+        let fillRatio = goal.remainingPct / 100.0
+        let isOver = goal.isOverBudget
+        let fillColor = isOver ? Theme.minus : Theme.progressFill
+        let bgColor = isOver ? Theme.overBG : Theme.progressBG
+
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(bgColor)
+                    .frame(height: barHeight)
+                Capsule()
+                    .fill(fillColor)
+                    .frame(width: CGFloat(animatedProgress) * geo.size.width, height: barHeight)
+            }
+        }
+        .frame(height: barHeight)
+        .padding(.horizontal, 2)
+        .onAppear {
+            animatedProgress = 0
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { animatedProgress = fillRatio }
+        }
+        .onChange(of: goal.remainingPct) { _, _ in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { animatedProgress = fillRatio }
+        }
+    }
+}
+
+private struct DashboardGoalRemainingLabel: View {
+    let goal: APIClient.DashboardActiveGoal
+
+    var body: some View {
+        let amount = goal.remainingAmount
+        let isOver = goal.isOverBudget
+        let text = isOver ? "\(usd(amount)) 초과했어요" : "\(usd(amount)) 남았어요"
+        Text(text)
+            .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
+            .foregroundStyle(isOver ? Theme.minus : Theme.text)
+            .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func usd(_ cents: Int) -> String {
@@ -450,8 +627,10 @@ private struct GoalProgressPage: View {
     var body: some View {
         let budget = budgetCents(for: goal.category)
         let spent = spentCentsThisMonth(for: goal.category)
-        let target = (budget == 0) ? 0 : min(Double(spent) / Double(budget), 1.0)
+        let target = (budget == 0) ? 0 : Double(spent) / Double(budget)
         let isOver = spent >= budget && budget > 0
+        /// 100%에서 시작해 줄어듦. 초과 시 빨간색으로 전체 채움
+        let fillRatio: Double = isOver ? 1 : (1 - min(target, 1))
         let fillColor = isOver ? Theme.minus : Theme.progressFill
         let bgColor = isOver ? Theme.overBG : Theme.progressBG
 
@@ -469,14 +648,14 @@ private struct GoalProgressPage: View {
         .padding(.horizontal, 2)
         .onAppear {
             animatedProgress = 0
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { animatedProgress = target }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { animatedProgress = fillRatio }
         }
         .onChange(of: spent) { _, _ in
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { animatedProgress = target }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { animatedProgress = fillRatio }
         }
     }
 
-    // MARK: - Data (임시. 지출/내역은 TransactionStore → Plaid 연동 시 실데이터, 목표 예산은 추후 백엔드/설정 연동 시 교체)
+    // MARK: - Data (Dashboard 없을 때만 사용. 있으면 DashboardGoalProgressPage에서 API 값 사용)
 
     private func budgetCents(for category: BudgetCategory) -> Int {
         switch category {

@@ -11,6 +11,8 @@ struct TermsAndConsentView: View {
     @Environment(\.dismiss) private var dismiss
     var onAgree: (() -> Void)?
 
+    // MARK: - State & Layout
+
     @State private var agreedToAll = false
     @State private var showTermsSheet = false
     @State private var showPrivacySheet = false
@@ -104,6 +106,8 @@ struct TermsAndConsentView: View {
             }
         }
     }
+
+    // MARK: - Helpers
 
     private func consentRow(title: String, onView: @escaping () -> Void) -> some View {
         HStack {

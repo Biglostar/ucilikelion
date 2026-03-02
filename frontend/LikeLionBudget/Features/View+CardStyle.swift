@@ -6,10 +6,14 @@
 //
 
 import SwiftUI
+import UIKit
+
+func hideKeyboard() {
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+}
 
 extension View {
-
-    // MARK: - Base Card (기존 유지)
+    // MARK: - Base Card
     func cardStyle(
         bg: Color = .white,
         corner: CGFloat = Theme.cardCorner,

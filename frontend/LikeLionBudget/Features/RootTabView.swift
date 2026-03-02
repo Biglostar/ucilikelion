@@ -9,23 +9,25 @@ import SwiftUI
 
 struct RootTabView: View {
     @EnvironmentObject private var onboardingStore: OnboardingStore
+    @EnvironmentObject private var settingsStore: SettingsStore
+
+    // MARK: - State (Stores / Tab)
+
     @StateObject private var transactionStore = TransactionStore()
     @StateObject private var goalsStore = GoalsStore()
-    @StateObject private var settingsStore = SettingsStore()
     @State private var selectedTab: Int = 0
 
     private var tabSelection: Binding<Int> {
         Binding(
             get: { onboardingStore.isTutorialActive ? onboardingStore.tutorialTabIndex : selectedTab },
             set: { new in
-                if onboardingStore.isTutorialActive {
-                    onboardingStore.tutorialTabIndex = new
-                } else {
-                    selectedTab = new
-                }
+                guard !onboardingStore.isTutorialActive else { return }
+                selectedTab = new
             }
         )
     }
+
+    // MARK: - Body (TabView + Onboarding Overlay)
 
     var body: some View {
         TabView(selection: tabSelection) {
@@ -76,6 +78,14 @@ struct RootTabView: View {
                     )
                 }
                 .ignoresSafeArea(.all)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if onboardingStore.isTutorialActive {
+                Color.clear
+                    .frame(height: 88)
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea(edges: .bottom)
             }
         }
     }
