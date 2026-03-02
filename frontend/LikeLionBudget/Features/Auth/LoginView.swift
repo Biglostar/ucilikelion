@@ -6,16 +6,20 @@
 //
 
 import SwiftUI
-import SafariServices
 import UIKit
+import GoogleSignIn
 
 struct LoginView: View {
     @Environment(\.dismiss) private var dismiss
+    var settingsStore: SettingsStore
+
+    // MARK: - State & Layout
 
     @State private var email = ""
     @State private var password = ""
     @State private var isPasswordVisible = false
-    @State private var showGoogleSignIn = false
+    @State private var isSigningIn = false
+    @State private var errorMessage: String?
 
     private let fieldCorner: CGFloat = 10
     private let fieldBorderOpacity: Double = 0.2
@@ -25,25 +29,44 @@ struct LoginView: View {
         ZStack {
             Color.white.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
+            ScrollView {
+                VStack(spacing: 0) {
+                    header
 
-                VStack(spacing: Theme.spacingSection) {
-                    emailField
-                    passwordField
-                    loginButton
-                    orDivider
-                    googleButton
+                    VStack(spacing: Theme.spacingSection) {
+                        emailField
+                        passwordField
+                        loginButton
+                        orDivider
+                        if let msg = errorMessage {
+                            Text(msg)
+                                .font(.custom(Theme.fontLaundry, size: Theme.smallBodySize))
+                                .foregroundStyle(Color.red)
+                                .multilineTextAlignment(.center)
+                        }
+                        googleButton
+                    }
+                    .padding(.horizontal, Theme.screenHorizontal)
+                    .padding(.top, Theme.spacingLarge)
+                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, Theme.screenHorizontal)
-                .padding(.top, Theme.spacingLarge)
-                Spacer(minLength: 0)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button { hideKeyboard() } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.progressFill)
+                }
             }
         }
-        .sheet(isPresented: $showGoogleSignIn) {
-            SafariView(url: googleSignInURL)
-        }
+        .disabled(isSigningIn)
     }
+
+    // MARK: - Subviews (header / fields / buttons)
 
     private var header: some View {
         HStack {
@@ -118,7 +141,6 @@ struct LoginView: View {
 
     private var loginButton: some View {
         Button {
-            // TODO: 이메일/비밀번호 로그인 (백엔드 연동)
         } label: {
             Text("로그인하기")
                 .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
@@ -149,7 +171,7 @@ struct LoginView: View {
 
     private var googleButton: some View {
         Button {
-            showGoogleSignIn = true
+            performGoogleSignIn()
         } label: {
             ZStack {
                 Circle()
@@ -165,7 +187,6 @@ struct LoginView: View {
         .buttonStyle(.plain)
     }
 
-    /// Asset 카탈로그 이미지셋 이름은 "GoogleLogo" (대문자 G). 2x/3x 비어 있어도 1x로 표시됨.
     private var googleLogoImage: some View {
         Image("GoogleLogo")
             .resizable()
@@ -173,35 +194,49 @@ struct LoginView: View {
             .frame(width: 28, height: 28)
     }
 
-    private var googleGColors: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(llHex: "#4285F4"),
-                Color(llHex: "#EA4335"),
-                Color(llHex: "#FBBC05"),
-                Color(llHex: "#34A853")
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    // MARK: - Google Sign-In / Helpers
+
+    private func performGoogleSignIn() {
+        errorMessage = nil
+        isSigningIn = true
+
+        guard let rootVC = rootViewController else {
+            errorMessage = "화면을 불러올 수 없어요."
+            isSigningIn = false
+            return
+        }
+
+        GIDSignIn.sharedInstance.signIn(withPresenting: rootVC) { [self] result, error in
+            isSigningIn = false
+            if let error = error {
+                let nsError = error as NSError
+                if nsError.code == -5 || nsError.domain == "com.google.GIDSignIn" && nsError.code == -1 {
+                    return
+                }
+                errorMessage = "로그인에 실패했어요. 다시 시도해 주세요."
+                return
+            }
+            guard let result = result else { return }
+            let profile = result.user.profile
+            settingsStore.setGoogleUser(
+                displayName: profile?.name,
+                email: profile?.email
+            )
+            dismiss()
+        }
     }
 
-    /// 구글 로그인 페이지. 이후 OAuth client_id/redirect_uri 연동 시 교체.
-    private var googleSignInURL: URL {
-        URL(string: "https://accounts.google.com")!
+    private var rootViewController: UIViewController? {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let window = windowScene.windows.first(where: { $0.isKeyWindow }),
+              var top = window.rootViewController else {
+            return nil
+        }
+        while let presented = top.presentedViewController {
+            top = presented
+        }
+        return top
     }
-}
-
-// MARK: - Safari (구글 로그인 페이지 인앱 표시)
-
-private struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        let vc = SFSafariViewController(url: url)
-        vc.preferredControlTintColor = UIColor(Theme.rose)
-        return vc
-    }
-
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }

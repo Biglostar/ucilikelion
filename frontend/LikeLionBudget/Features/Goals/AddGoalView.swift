@@ -12,11 +12,15 @@ struct AddGoalView: View {
     var editingGoal: Goal? = nil
     @Environment(\.dismiss) private var dismiss
 
+    // MARK: - State
+
     @State private var title: String = ""
     @State private var memo: String = ""
     @State private var category: BudgetCategory = .others
 
     private var isEditMode: Bool { editingGoal != nil }
+
+    // MARK: - Body
 
     var body: some View {
         NavigationStack {
@@ -32,6 +36,7 @@ struct AddGoalView: View {
 
                             TextField("예: 카페비 줄이기", text: $title)
                                 .textInputAutocapitalization(.words)
+                                .foregroundStyle(Color.black)
 
                             Divider().opacity(0.25)
 
@@ -41,6 +46,7 @@ struct AddGoalView: View {
 
                             TextField("예: 이번 달 5번 이하", text: $memo, axis: .vertical)
                                 .lineLimit(2...4)
+                                .foregroundStyle(Color.black)
                         }
                         .cardStyle(bg: Theme.beige, corner: Theme.cardCorner, strokeOpacity: 0.06, padding: Theme.cardPadding)
 
@@ -97,6 +103,7 @@ struct AddGoalView: View {
                 .padding(.top, Theme.screenTop)
                 .padding(.bottom, Theme.screenBottom)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(Color.white)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -107,6 +114,14 @@ struct AddGoalView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("뒤로") { dismiss() }
                         .foregroundStyle(Theme.text)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button { hideKeyboard() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Theme.progressFill)
+                    }
                 }
             }
             .onAppear {
@@ -123,8 +138,9 @@ struct AddGoalView: View {
 
     private var categoryChips: some View {
         let all = Array(BudgetCategory.allCases)
-        return VStack(alignment: .center, spacing: 14) {
-            FlowLayout(horizontalSpacing: 10, verticalSpacing: 10) {
+        let spacing = Theme.spacingSmall + Theme.spacingTight
+        return VStack(alignment: .center, spacing: Theme.spacingStandard) {
+            FlowLayout(horizontalSpacing: spacing, verticalSpacing: spacing) {
                 categoryButton(all[0])
                 categoryButton(all[1])
                 categoryButton(all[2])
@@ -133,7 +149,7 @@ struct AddGoalView: View {
                 categoryButton(all[5])
                 categoryButton(all[6])
             }
-            FlowLayout(horizontalSpacing: 10, verticalSpacing: 10) {
+            FlowLayout(horizontalSpacing: spacing, verticalSpacing: spacing) {
                 categoryButton(all[7])
                 categoryButton(all[8])
                 categoryButton(all[9])
@@ -143,21 +159,21 @@ struct AddGoalView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
+        .padding(.vertical, Theme.spacingTight)
     }
 
     private func categoryButton(_ c: BudgetCategory) -> some View {
         Button {
             category = c
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.spacingSmall) {
                 Text(categoryEmoji(c))
-                    .font(.system(size: 15))
+                    .font(.system(size: Theme.dateLabelSize))
                 Text(c.displayNameKR)
                     .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
                     .fontWeight(.semibold)
             }
-            .padding(.vertical, Theme.spacingSmall + 4)
+            .padding(.vertical, Theme.spacingSmall + Theme.spacingTight)
             .padding(.horizontal, Theme.cardPadding)
             .background(category == c ? Theme.progressFill : Theme.progressBG)
             .foregroundStyle(category == c ? Color.white : Theme.progressFill)

@@ -9,6 +9,10 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var onboardingStore: OnboardingStore
+    @EnvironmentObject private var settingsStore: SettingsStore
+
+    // MARK: - State
+
     @State private var showLoginSheet = false
     @State private var showTermsSheet = false
     @State private var showPlaidSheet = false
@@ -59,17 +63,18 @@ struct ContentView: View {
             if shouldShow { showLoginSheet = true }
         }
         .sheet(isPresented: $showLoginSheet) {
-            LoginView()
+            LoginView(settingsStore: settingsStore)
                 .onDisappear {
                     showLoginSheet = false
                     onboardingStore.showLoginAfterTutorial = false
-                    showTermsSheet = true
+                    if !settingsStore.settings.hasCompletedTermsAndPlaidOnce {
+                        showTermsSheet = true
+                    }
                 }
         }
         .sheet(isPresented: $showTermsSheet) {
             TermsAndConsentView(onAgree: {
                 showTermsSheet = false
-                // 약관 시트가 완전히 닫힌 뒤 플레이드 시트 띄우기 (바로 띄우면 시트가 금방 내려가는 현상 방지)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                     showPlaidSheet = true
                 }
@@ -88,8 +93,9 @@ struct ContentView: View {
                         plaidStep = .link
                     })
                 } else {
-                    PlaidLinkView(onComplete: {
+                    PlaidLinkView(settingsStore: settingsStore, onComplete: {
                         showPlaidSheet = false
+                        settingsStore.setHasCompletedTermsAndPlaidOnce(true)
                         onboardingStore.markPostOnboardingDone()
                     })
                 }
@@ -99,6 +105,8 @@ struct ContentView: View {
             }
         }
     }
+
+    // MARK: - Main Content
 
     private var mainContent: some View {
         RootTabView()

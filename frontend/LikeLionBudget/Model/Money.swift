@@ -28,18 +28,4 @@ enum Money {
         if cents < 0 { return "-\(absStr)" }
         return absStr
     }
-
-    /// - Parameter amountWon
-    static func wonString(amountWon: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = Locale(identifier: "ko_KR")
-        let num = abs(amountWon)
-        return (formatter.string(from: NSNumber(value: num)) ?? "\(num)") + " 원"
-    }
-
-    static func wonString(fromUsdCents cents: Int) -> String {
-        let won = cents * 13 / 100
-        return wonString(amountWon: won)
-    }
 }

@@ -10,19 +10,23 @@ import SwiftUI
 struct ReportView: View {
     @EnvironmentObject private var onboardingStore: OnboardingStore
     @ObservedObject var store: TransactionStore
-    @State private var onboardingFrames: [Int: [CGRect]] = [:]
 
+    // MARK: - State
+
+    @State private var onboardingFrames: [Int: [CGRect]] = [:]
     @State private var selectedMonth: Date = {
         let cal = MockData.usCalendar
         return cal.date(byAdding: .month, value: -1, to: Date()) ?? Date()
     }()
 
-    @State private var isMonthlyExpanded: Bool = true
+    @State private var isMonthlyExpanded: Bool = false
     @State private var isFixedExpanded: Bool = false
 
     private var detectedFixedGroups: [RecurringGroup] {
         RecurringDetector().detect(from: store.transactions)
     }
+
+    // MARK: - Body
 
     var body: some View {
         NavigationStack {
@@ -78,6 +82,8 @@ struct ReportView: View {
                     } else if step == 12 {
                         isMonthlyExpanded = false
                         isFixedExpanded = true
+                    } else {
+                        isFixedExpanded = false  // step 12 벗어나면 고정지출 다시 닫기
                     }
                 }
             }
@@ -102,7 +108,7 @@ struct ReportView: View {
 
     private func fixedHeaderSubtitle(groups: [RecurringGroup]) -> String {
         let total = groups.reduce(0) { $0 + $1.totalCents }
-        return "최근 3개월 추정 · 총합 \(usd(total))"
+        return "총합 \(usd(total))"
     }
 
     private func monthlySummary(for month: Date) -> MonthlySummary {

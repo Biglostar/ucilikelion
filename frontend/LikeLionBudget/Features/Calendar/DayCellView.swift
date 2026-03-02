@@ -10,6 +10,7 @@ import SwiftUI
 struct DayCellView: View {
     let date: Date
     let netCents: Int
+    let hasTransactions: Bool
     let isSelected: Bool
     var isCurrentMonth: Bool = true
 
@@ -23,15 +24,15 @@ struct DayCellView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isCurrentMonth ? Color.black : Theme.weekdaySimbol)
 
-            if isCurrentMonth {
-                Text(netText(netCents))
-                    .font(.caption)
+            if isCurrentMonth, !netText.isEmpty {
+                Text(netText)
+                    .font(.custom(Theme.fontLaundry, size: Theme.captionSmallSize))
                     .foregroundStyle(netCents >= 0 ? Theme.plus : Theme.minus)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.5)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 48)
+        .frame(maxWidth: .infinity, minHeight: 44)
         .padding(.vertical, Theme.spacingSmall)
         .background(backgroundColor)
         .overlay(
@@ -42,7 +43,7 @@ struct DayCellView: View {
 
     private var backgroundColor: Color {
         if !isCurrentMonth { return Color.clear }
-        if netCents != 0 { return Theme.beige }
+        if hasTransactions { return Theme.beige }
         return Color.clear
     }
 
@@ -56,9 +57,9 @@ struct DayCellView: View {
         MockData.usCalendar.component(.day, from: date)
     }
 
-    private func netText(_ cents: Int) -> String {
-        if cents == 0 { return "" }
-        return Money.usdSignedString(fromCents: cents)
+    private var netText: String {
+        if !hasTransactions { return "" }
+        return Money.usdSignedString(fromCents: netCents)
     }
 }
 

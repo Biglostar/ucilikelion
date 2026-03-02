@@ -10,6 +10,8 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var settings: SettingsStore
 
+    // MARK: - Body
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -30,6 +32,8 @@ struct SettingsView: View {
             }
         }
     }
+
+    // MARK: - 설정 카드 (개인정보 / 알림 / 잔소리 / 약관)
 
     private var settingsCardContent: some View {
         VStack(spacing: 0) {
@@ -117,6 +121,8 @@ struct SettingsView: View {
         case chevron
     }
 
+    // MARK: - Helpers (settingsRow / sampleMessage / toneColor / segment)
+
     private func settingsRow(title: String, trailing: RowTrailing) -> some View {
         HStack {
             Text(title)
@@ -161,31 +167,48 @@ struct SettingsView: View {
 
 private struct NaggingLevelChips: View {
     @Binding var selected: NaggingLevel
+    private let pad: CGFloat = 4
+    private let segmentCount = 3
 
     var body: some View {
-        HStack(spacing: 0) {
-            segment(.mild, "순한맛")
-            segment(.medium, "매운맛")
-            segment(.spicy, "팩폭맛")
+        GeometryReader { geo in
+            let segW = (geo.size.width - pad * 2) / CGFloat(segmentCount)
+            let idx = selected.rawValue
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Theme.progressBG)
+
+                Capsule()
+                    .fill(Theme.progressFill)
+                    .frame(width: segW, height: geo.size.height - pad * 2)
+                    .offset(x: pad + CGFloat(idx) * segW)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
+
+                HStack(spacing: 0) {
+                    segment(.mild, "순한맛")
+                    segment(.medium, "매운맛")
+                    segment(.spicy, "팩폭맛")
+                }
+                .padding(pad)
+            }
         }
-        .padding(4)
-        .background(Theme.progressBG)
+        .frame(height: 44)
         .clipShape(Capsule())
         .padding(.horizontal, Theme.cardInnerHorizontal)
     }
 
     private func segment(_ lv: NaggingLevel, _ title: String) -> some View {
         Button {
-            selected = lv
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { selected = lv }
         } label: {
             Text(title)
                 .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(selected == lv ? Theme.progressFill : Color.clear)
-                .foregroundStyle(selected == lv ? Color.white : Theme.progressFill)
-                .clipShape(Capsule())
+                .contentShape(Rectangle())
+                .foregroundStyle(selected == lv ? .white : Theme.progressFill)
         }
         .buttonStyle(.plain)
     }
@@ -198,10 +221,14 @@ struct PersonalInfoView: View {
     @EnvironmentObject private var onboardingStore: OnboardingStore
     @Environment(\.dismiss) private var dismiss
     @State private var showDeleteConfirm = false
+    @State private var showLogoutDoneAlert = false
 
-    private var displayName: String { settings.settings.userDisplayName ?? "홍길동" }
-    private var phone: String { settings.settings.userPhone ?? "+1 949-158-2222" }
-    private var email: String { settings.settings.userEmail ?? "gildonghong@gmail.com" }
+    private var displayName: String { settings.settings.userDisplayName ?? "—" }
+    private var phone: String { settings.settings.userPhone ?? "—" }
+    private var email: String { settings.settings.userEmail ?? "—" }
+    private var hasLoggedInUser: Bool {
+        settings.settings.userDisplayName != nil || settings.settings.userEmail != nil
+    }
 
     var body: some View {
         ScrollView {
@@ -209,13 +236,13 @@ struct PersonalInfoView: View {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: Theme.PersonalInfo.cardInternalTopClear)
                     VStack(spacing: 0) {
-                        infoRow(label: "이름", value: displayName)
+                        infoRow(label: "이름", value: displayName, placeholder: !hasLoggedInUser)
                         personalInfoDivider()
-                        infoRow(label: "전화번호", value: phone)
+                        infoRow(label: "전화번호", value: phone, placeholder: !hasLoggedInUser)
                         personalInfoDivider()
-                        infoRow(label: "이메일", value: email)
+                        infoRow(label: "이메일", value: email, placeholder: !hasLoggedInUser)
                         personalInfoDivider()
-                        Button { performLogout() } label: {
+                        Button { showLogoutDoneAlert = true } label: {
                             actionRow(label: "로그아웃")
                         }
                         .buttonStyle(.plain)
@@ -271,18 +298,27 @@ struct PersonalInfoView: View {
             .presentationDetents([.height(Theme.AccountDeletion.sheetHeight)])
             .presentationDragIndicator(.visible)
             .presentationBackground(Color.white)
+            .presentationCornerRadius(Theme.sheetCornerRadius)
+        }
+        .alert("로그아웃되었어요", isPresented: $showLogoutDoneAlert) {
+            Button("확인") {
+                showLogoutDoneAlert = false
+                performLogout()
+            }
+        } message: {
+            Text("다시 로그인하면 계정으로 들어갈 수 있어요.")
         }
     }
 
-    private func infoRow(label: String, value: String) -> some View {
+    private func infoRow(label: String, value: String, placeholder: Bool = false) -> some View {
         HStack {
             Text(label)
                 .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
                 .foregroundStyle(Theme.text)
             Spacer()
-            Text(value)
+            Text(placeholder && value == "—" ? "로그인 후 표시됩니다" : value)
                 .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
-                .foregroundStyle(Theme.text.opacity(0.85))
+                .foregroundStyle(placeholder && value == "—" ? Theme.text.opacity(0.5) : Theme.text.opacity(0.85))
                 .lineLimit(1)
         }
         .padding(.vertical, Theme.buttonVerticalPadding)
@@ -309,7 +345,7 @@ struct PersonalInfoView: View {
     }
 
     private func performLogout() {
-        // 구글 로그아웃 연동 시 여기서 처리
+        settings.clearGoogleUser()
         onboardingStore.resetPostOnboardingForReLogin()
         dismiss()
     }
@@ -395,7 +431,7 @@ private struct AccountDeletionConfirmSheet: View {
     }
 }
 
-// MARK: - 이용 약관 및 정책
+// MARK: - 약관/정책 (TermsPolicyContentType / TermsPolicyContent / TermsPolicyView)
 
 enum TermsPolicyContentType {
     case terms   // 서비스 이용약관
@@ -403,7 +439,6 @@ enum TermsPolicyContentType {
     case unified // 이용 약관 및 정책 (설정용 통합)
 }
 
-/// 설정·약관 동의 화면에서 공통으로 쓰는 전문 텍스트
 enum TermsPolicyContent {
     static let termsFull = """
     꼽주머니 이용약관
@@ -501,7 +536,7 @@ struct TermsPolicyView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text(displayTitle)
-                    .font(.custom(Theme.fontLaundry, size: Theme.titleSize))
+                    .font(.custom(Theme.fontLaundry, size: Theme.subscreenTitleSize))
                     .foregroundStyle(Theme.rose)
             }
         }

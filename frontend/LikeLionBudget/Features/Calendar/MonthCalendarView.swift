@@ -46,6 +46,7 @@ struct MonthCalendarView: View {
                         DayCellView(
                             date: date,
                             netCents: netCents(for: date),
+                            hasTransactions: hasTransactions(for: date),
                             isSelected: isSelected(date),
                             isCurrentMonth: isInDisplayedMonth(date)
                         )
@@ -143,6 +144,10 @@ struct MonthCalendarView: View {
     // MARK: - Helpers
     private func netCents(for date: Date) -> Int {
         store.netCents(on: date)
+    }
+
+    private func hasTransactions(for date: Date) -> Bool {
+        !store.transactionsForDate(date).isEmpty
     }
 
     private func isSelected(_ date: Date) -> Bool {

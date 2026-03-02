@@ -21,6 +21,7 @@ struct SpendProgressCard: View {
         let raw = (budgetCents == 0) ? 0 : Double(spentCents) / Double(budgetCents)
         let progress = max(raw, 0)
         let isFull = progress >= 1.0
+        let fillRatio: CGFloat = isFull ? 1 : CGFloat(1 - min(progress, 1))
 
         let fillColor = isFull ? Theme.minus : Theme.progressFill
         let bgColor   = isFull ? Theme.overBG : Theme.progressBG
@@ -37,10 +38,10 @@ struct SpendProgressCard: View {
                     Capsule()
                         .fill(fillColor)
                         .frame(
-                            width: min(CGFloat(progress), 1) * geo.size.width,
+                            width: fillRatio * geo.size.width,
                             height: barHeight
                         )
-                        .animation(.spring(response: 0.25, dampingFraction: 0.9), value: progress)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.9), value: fillRatio)
                 }
             }
             .frame(height: barHeight)

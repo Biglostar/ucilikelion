@@ -8,6 +8,8 @@
 import SwiftUI
 import Combine
 
+// MARK: - OnboardingStepConfig
+
 struct OnboardingStepConfig {
     let step: Int
     let message: String
@@ -15,11 +17,15 @@ struct OnboardingStepConfig {
     var opensDayDetail: Bool { step == 6 }
 }
 
+// MARK: - OnboardingStore
+
 final class OnboardingStore: ObservableObject {
     private let defaults = UserDefaults.standard
     private let keySeenWelcome = "onboarding.hasSeenWelcome"
     private let keyCompleted = "onboarding.hasCompleted"
     private let keyPostOnboardingDone = "onboarding.postOnboardingDone"
+
+    // MARK: - Published State
 
     @Published var hasSeenWelcome: Bool {
         didSet { defaults.set(hasSeenWelcome, forKey: keySeenWelcome) }
@@ -39,18 +45,17 @@ final class OnboardingStore: ObservableObject {
 
     @Published var useScreenshotTutorial: Bool = false
 
-    /// 디버깅 true면 앱 시작 시마다 튜토리얼 시작, 릴리즈 시 false.
+    /// 튜토리얼 디버깅용
     static var debugAlwaysStartFromTutorial: Bool {
-        #if DEBUG
-        return true
-        #else
+        // #if DEBUG
+        // return true
+        // #else
         return false
-        #endif
+        // #endif
     }
 
     var isWelcomeScreen: Bool { !hasSeenWelcome }
     var isTutorialActive: Bool { hasSeenWelcome && !hasCompletedOnboarding && currentStep >= 0 && currentStep <= 12 }
-    /// 목표/거래 시드 데이터는 step 1부터만 표시. step 0(처음 화면)에서는 빈 화면.
     var showTutorialSeedData: Bool { hasSeenWelcome && !hasCompletedOnboarding && currentStep >= 1 && currentStep <= 12 }
     var hasCompletedPostOnboardingFlow: Bool {
         get { defaults.bool(forKey: keyPostOnboardingDone) }
@@ -71,6 +76,8 @@ final class OnboardingStore: ObservableObject {
         OnboardingStepConfig(step: 11, message: "카테고리/기간별 소비를 확인", tabIndex: 1),
         OnboardingStepConfig(step: 12, message: "고정지출을 한눈에 볼 수 있어요", tabIndex: nil),
     ]
+
+    // MARK: - Init & Persistence
 
     init() {
         if Self.debugAlwaysStartFromTutorial {
@@ -97,6 +104,8 @@ final class OnboardingStore: ObservableObject {
         collectedOnboardingFrames = [:]
     }
 
+    // MARK: - Actions (mergeOnboardingFrames / advance / advanceFromSheets)
+
     func mergeOnboardingFrames(_ dict: [Int: [CGRect]]) {
         for (k, v) in dict {
             collectedOnboardingFrames[k] = v
@@ -117,10 +126,6 @@ final class OnboardingStore: ObservableObject {
             if currentStep == 6 {
                 requestShowAddTransaction = true
                 addTransactionSheetOpenedForStep6 = true
-                return
-            }
-            if currentStep == 10 {
-                requestShowAddGoal = true
                 return
             }
         }
