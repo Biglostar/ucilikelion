@@ -15,15 +15,12 @@ private struct GoalSheetItem: Identifiable {
 }
 
 struct GoalsListView: View {
-    @EnvironmentObject private var onboardingStore: OnboardingStore
     @ObservedObject var goalsStore: GoalsStore
 
     // MARK: - State
 
     @State private var showAdd: Bool = false
     @State private var goalToEdit: GoalSheetItem? = nil
-    @State private var didOpenAddGoalForOnboarding: Bool = false
-    @State private var onboardingFrames: [Int: [CGRect]] = [:]
 
     var body: some View {
         NavigationStack {
@@ -34,13 +31,11 @@ struct GoalsListView: View {
                             ForEach(Array(goalsStore.goals.enumerated()), id: \.element.id) { index, goal in
                                 goalRow(
                                     goal: goalsStore.binding(for: goal.id) ?? .constant(goal),
-                                    isFirst: index == 0,
                                     onTapToEdit: { goalToEdit = GoalSheetItem(goal: goal) }
                                 )
                             }
                         }
                         .llContainer()
-                        .onboardingFrame(stepId: 8)
                     }
 
                     Button {
@@ -54,7 +49,6 @@ struct GoalsListView: View {
                             .foregroundStyle(.white)
                             .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
                     }
-                    .onboardingFrame(stepId: 10)
                 }
                 .padding(.horizontal, Theme.screenHorizontal)
                 .padding(.top, Theme.screenTop + Theme.screenTopNavExtra)
@@ -68,43 +62,10 @@ struct GoalsListView: View {
                         .foregroundStyle(Theme.rose)
                 }
             }
-            .onPreferenceChange(OnboardingFramePreferenceKey.self) { value in
-                onboardingFrames = value
-                onboardingStore.mergeOnboardingFrames(value)
-            }
-            .onChange(of: onboardingStore.requestShowAddGoal) { _, requested in
-                if requested {
-                    showAdd = true
-                    didOpenAddGoalForOnboarding = true
-                    onboardingStore.requestShowAddGoal = false
-                }
-            }
-            .onChange(of: onboardingStore.currentStep) { _, step in
-                if step == 9 && didOpenAddGoalForOnboarding {
-                    showAdd = false
-                    didOpenAddGoalForOnboarding = false
-                }
-            }
-            .sheet(isPresented: $showAdd, onDismiss: {
-                if didOpenAddGoalForOnboarding {
-                    onboardingStore.advanceFromAddGoalSheet()
-                    didOpenAddGoalForOnboarding = false
-                }
-            }) {
-                ZStack(alignment: .bottom) {
-                    AddGoalView(goalsStore: goalsStore)
-                        .presentationDetents([.large])
-                        .presentationCornerRadius(Theme.sheetCornerRadius)
-                    if didOpenAddGoalForOnboarding {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture { showAdd = false }
-                        Text("아무 곳이나 탭하면 다음으로 넘어갑니다")
-                            .font(.custom(Theme.fontLaundry, size: Theme.smallBodySize))
-                            .foregroundStyle(Theme.text.opacity(0.5))
-                            .padding(.bottom, Theme.screenBottom + 8)
-                    }
-                }
+            .sheet(isPresented: $showAdd) {
+                AddGoalView(goalsStore: goalsStore)
+                    .presentationDetents([.large])
+                    .presentationCornerRadius(Theme.sheetCornerRadius)
             }
             .sheet(item: $goalToEdit) { item in
                 AddGoalView(goalsStore: goalsStore, editingGoal: item.goal)
@@ -117,7 +78,7 @@ struct GoalsListView: View {
     // MARK: - Subviews (goalRow)
 
     @ViewBuilder
-    private func goalRow(goal: Binding<Goal>, isFirst: Bool, onTapToEdit: @escaping () -> Void) -> some View {
+    private func goalRow(goal: Binding<Goal>, onTapToEdit: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
             Button(action: onTapToEdit) {
                 HStack(spacing: 12) {
@@ -136,8 +97,9 @@ struct GoalsListView: View {
                             .foregroundStyle(Theme.text)
 
                         Text(goal.wrappedValue.category.displayNameKR)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .font(.custom(Theme.fontLaundry, size: 12))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Theme.text.opacity(0.85))
                     }
 
                     Spacer(minLength: 0)
@@ -149,7 +111,6 @@ struct GoalsListView: View {
             Toggle("", isOn: combinedToggleBinding(for: goal))
                 .labelsHidden()
                 .tint(Theme.progressFill)
-                .onboardingFrame(stepId: 9)
         }
         .padding(12)
         .background(Theme.beige)

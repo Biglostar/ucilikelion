@@ -88,7 +88,6 @@ enum Theme {
     static var screenBottom: CGFloat { 28 * scale }
     static var cardPadding: CGFloat { 14 * scale }
     static var cardCorner: CGFloat { 10 * scale }
-    /// 시트(팝업) 상단 모서리 굴곡. 거래 추가/목표 추가 등 다른 팝업과 통일
     static var sheetCornerRadius: CGFloat { 20 * scale }
     static var titleSize: CGFloat { 28 * scale }
     static var subscreenTitleSize: CGFloat { 22 * scale }

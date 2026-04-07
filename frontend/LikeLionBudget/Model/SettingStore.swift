@@ -33,7 +33,8 @@ struct AppSettings: Codable {
     var notificationsEnabled: Bool
     var naggingLevel: NaggingLevel
     var plaidConnected: Bool
-    /// 로그아웃 후 재로그인 시 약관/플레이드 화면 스킵용. 로그아웃해도 초기화하지 않음.
+    /// 약관 동의 완료 (Plaid·로그인 전에도 저장해 매 실행마다 약관 시트가 뜨지 않게 함)
+    var hasAcceptedTerms: Bool
     var hasCompletedTermsAndPlaidOnce: Bool
     var userDisplayName: String?
     var userPhone: String?
@@ -41,15 +42,26 @@ struct AppSettings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case privacyLowMode, notificationsEnabled, naggingLevel, plaidConnected
-        case hasCompletedTermsAndPlaidOnce
+        case hasAcceptedTerms, hasCompletedTermsAndPlaidOnce
         case userDisplayName, userPhone, userEmail
     }
 
-    init(privacyLowMode: Bool, notificationsEnabled: Bool, naggingLevel: NaggingLevel, plaidConnected: Bool, hasCompletedTermsAndPlaidOnce: Bool = false, userDisplayName: String? = nil, userPhone: String? = nil, userEmail: String? = nil) {
+    init(
+        privacyLowMode: Bool,
+        notificationsEnabled: Bool,
+        naggingLevel: NaggingLevel,
+        plaidConnected: Bool,
+        hasAcceptedTerms: Bool = false,
+        hasCompletedTermsAndPlaidOnce: Bool = false,
+        userDisplayName: String? = nil,
+        userPhone: String? = nil,
+        userEmail: String? = nil
+    ) {
         self.privacyLowMode = privacyLowMode
         self.notificationsEnabled = notificationsEnabled
         self.naggingLevel = naggingLevel
         self.plaidConnected = plaidConnected
+        self.hasAcceptedTerms = hasAcceptedTerms
         self.hasCompletedTermsAndPlaidOnce = hasCompletedTermsAndPlaidOnce
         self.userDisplayName = userDisplayName
         self.userPhone = userPhone
@@ -63,6 +75,10 @@ struct AppSettings: Codable {
         naggingLevel = try c.decode(NaggingLevel.self, forKey: .naggingLevel)
         plaidConnected = try c.decode(Bool.self, forKey: .plaidConnected)
         hasCompletedTermsAndPlaidOnce = try c.decodeIfPresent(Bool.self, forKey: .hasCompletedTermsAndPlaidOnce) ?? false
+        hasAcceptedTerms = try c.decodeIfPresent(Bool.self, forKey: .hasAcceptedTerms) ?? false
+        if hasCompletedTermsAndPlaidOnce {
+            hasAcceptedTerms = true
+        }
         userDisplayName = try c.decodeIfPresent(String.self, forKey: .userDisplayName)
         userPhone = try c.decodeIfPresent(String.self, forKey: .userPhone)
         userEmail = try c.decodeIfPresent(String.self, forKey: .userEmail)
@@ -74,6 +90,7 @@ struct AppSettings: Codable {
         try c.encode(notificationsEnabled, forKey: .notificationsEnabled)
         try c.encode(naggingLevel, forKey: .naggingLevel)
         try c.encode(plaidConnected, forKey: .plaidConnected)
+        try c.encode(hasAcceptedTerms, forKey: .hasAcceptedTerms)
         try c.encode(hasCompletedTermsAndPlaidOnce, forKey: .hasCompletedTermsAndPlaidOnce)
         try c.encodeIfPresent(userDisplayName, forKey: .userDisplayName)
         try c.encodeIfPresent(userPhone, forKey: .userPhone)
@@ -88,6 +105,9 @@ final class SettingsStore: ObservableObject {
         didSet { save() }
     }
 
+    /// 설정 등에서 로그인 시트를 띄울 때만 `true`로 설정 (로그아웃 직후 자동 표시 없음)
+    @Published var requestShowLogin: Bool = false
+
     private let key = "LikeLionBudget.AppSettings.v1"
 
     init() {
@@ -99,6 +119,7 @@ final class SettingsStore: ObservableObject {
                 notificationsEnabled: true,
                 naggingLevel: .medium,
                 plaidConnected: false,
+                hasAcceptedTerms: false,
                 hasCompletedTermsAndPlaidOnce: false,
                 userDisplayName: nil,
                 userPhone: nil,
@@ -148,8 +169,11 @@ final class SettingsStore: ObservableObject {
         settings.plaidConnected = value
     }
 
-    /// 약관·플레이드 한 번이라도 완료했으면 true. 로그아웃 후 재로그인 시 약관/플레이드 스킵에 사용.
     func setHasCompletedTermsAndPlaidOnce(_ value: Bool) {
         settings.hasCompletedTermsAndPlaidOnce = value
+    }
+
+    func setHasAcceptedTerms(_ value: Bool) {
+        settings.hasAcceptedTerms = value
     }
 }

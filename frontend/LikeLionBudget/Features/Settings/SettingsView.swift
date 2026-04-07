@@ -218,13 +218,11 @@ private struct NaggingLevelChips: View {
 
 struct PersonalInfoView: View {
     @ObservedObject var settings: SettingsStore
-    @EnvironmentObject private var onboardingStore: OnboardingStore
     @Environment(\.dismiss) private var dismiss
     @State private var showDeleteConfirm = false
     @State private var showLogoutDoneAlert = false
 
     private var displayName: String { settings.settings.userDisplayName ?? "—" }
-    private var phone: String { settings.settings.userPhone ?? "—" }
     private var email: String { settings.settings.userEmail ?? "—" }
     private var hasLoggedInUser: Bool {
         settings.settings.userDisplayName != nil || settings.settings.userEmail != nil
@@ -238,14 +236,21 @@ struct PersonalInfoView: View {
                     VStack(spacing: 0) {
                         infoRow(label: "이름", value: displayName, placeholder: !hasLoggedInUser)
                         personalInfoDivider()
-                        infoRow(label: "전화번호", value: phone, placeholder: !hasLoggedInUser)
-                        personalInfoDivider()
                         infoRow(label: "이메일", value: email, placeholder: !hasLoggedInUser)
                         personalInfoDivider()
-                        Button { showLogoutDoneAlert = true } label: {
-                            actionRow(label: "로그아웃")
+                        if hasLoggedInUser {
+                            Button { showLogoutDoneAlert = true } label: {
+                                actionRow(label: "로그아웃")
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Button {
+                                settings.requestShowLogin = true
+                            } label: {
+                                actionRow(label: "로그인")
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                         personalInfoDivider()
                         Button { showDeleteConfirm = true } label: {
                             actionRow(label: "계정 탈퇴")
@@ -306,7 +311,7 @@ struct PersonalInfoView: View {
                 performLogout()
             }
         } message: {
-            Text("다시 로그인하면 계정으로 들어갈 수 있어요.")
+            Text("아래 로그인 버튼을 누르면 다시 로그인할 수 있어요.")
         }
     }
 
@@ -346,13 +351,11 @@ struct PersonalInfoView: View {
 
     private func performLogout() {
         settings.clearGoogleUser()
-        onboardingStore.resetPostOnboardingForReLogin()
         dismiss()
     }
 
     private func performAccountDeletion() {
         // 계정 탈퇴 API 연동 시 여기서 처리
-        onboardingStore.resetPostOnboardingForReLogin()
         showDeleteConfirm = false
         dismiss()
     }

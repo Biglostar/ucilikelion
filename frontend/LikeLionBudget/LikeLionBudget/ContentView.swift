@@ -8,17 +8,13 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject private var onboardingStore: OnboardingStore
     @EnvironmentObject private var settingsStore: SettingsStore
-
-    // MARK: - State
 
     @State private var showLoginSheet = false
     @State private var showTermsSheet = false
     @State private var showPlaidSheet = false
     @State private var plaidStep: PlaidSheetStep = .intro
     @State private var showSplash = true
-    @State private var showPostTutorialCover = false
 
     var body: some View {
         Group {
@@ -32,51 +28,47 @@ struct ContentView: View {
                         )
                     )
             } else {
-                mainContent
+                RootTabView()
             }
         }
         .animation(.easeInOut(duration: 0.55), value: showSplash)
-        .onChange(of: onboardingStore.showPostTutorialScreen) { _, new in
-            showPostTutorialCover = new
-        }
-        .fullScreenCover(isPresented: $showPostTutorialCover) {
-            PostTutorialOverlay(onConnect: {
-                showPostTutorialCover = false
-                onboardingStore.showPostTutorialScreen = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    onboardingStore.showLoginAfterTutorial = true
-                }
-            })
-        }
         .onAppear {
             guard showSplash else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     showSplash = false
                 }
-                if !onboardingStore.hasSeenWelcome {
-                    onboardingStore.startTutorial()
+                // 최초 1회만: 약관 → 로그인 → (미연결 시) Plaid
+                if !settingsStore.settings.hasAcceptedTerms {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showTermsSheet = true
+                    }
                 }
             }
         }
-        .onChange(of: onboardingStore.showLoginAfterTutorial) { _, shouldShow in
-            if shouldShow { showLoginSheet = true }
+        .onChange(of: settingsStore.requestShowLogin) { _, requested in
+            if requested {
+                showLoginSheet = true
+                settingsStore.requestShowLogin = false
+            }
         }
         .sheet(isPresented: $showLoginSheet) {
             LoginView(settingsStore: settingsStore)
                 .onDisappear {
                     showLoginSheet = false
-                    onboardingStore.showLoginAfterTutorial = false
-                    if !settingsStore.settings.hasCompletedTermsAndPlaidOnce {
-                        showTermsSheet = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        // 이미 Plaid 연결됨(로그아웃 후 재로그인 등)이면 Plaid 시트를 띄우지 않음
+                        guard !settingsStore.settings.plaidConnected else { return }
+                        showPlaidSheet = true
                     }
                 }
         }
         .sheet(isPresented: $showTermsSheet) {
             TermsAndConsentView(onAgree: {
+                settingsStore.setHasAcceptedTerms(true)
                 showTermsSheet = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    showPlaidSheet = true
+                    showLoginSheet = true
                 }
             })
             .onDisappear {
@@ -96,7 +88,6 @@ struct ContentView: View {
                     PlaidLinkView(settingsStore: settingsStore, onComplete: {
                         showPlaidSheet = false
                         settingsStore.setHasCompletedTermsAndPlaidOnce(true)
-                        onboardingStore.markPostOnboardingDone()
                     })
                 }
             }
@@ -104,12 +95,6 @@ struct ContentView: View {
                 showPlaidSheet = false
             }
         }
-    }
-
-    // MARK: - Main Content
-
-    private var mainContent: some View {
-        RootTabView()
     }
 }
 
@@ -139,42 +124,3 @@ private struct SplashView: View {
             }
     }
 }
-
-// MARK: - 튜토리얼 종료 후 계정 연결 안내
-
-private struct PostTutorialOverlay: View {
-    let onConnect: () -> Void
-
-    var body: some View {
-        Color.black.opacity(0.80)
-            .ignoresSafeArea()
-            .overlay {
-                VStack(spacing: Theme.spacingSection) {
-                    Spacer()
-                    Text("이제 실제 데이터를 연결해볼까요?")
-                        .font(.custom(Theme.fontLaundry, size: Theme.titleSize))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                    Text("지금까지 보신 화면은 데모 데이터입니다.\n계정을 연결하면 자동으로 거래 내역을 불러오고\n예산을 분석해드려요.")
-                        .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(4)
-                    Spacer()
-                    Button(action: onConnect) {
-                        Text("계정 연결하고 시작하기")
-                            .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, Theme.buttonVerticalPadding)
-                            .background(Theme.rose)
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
-                    }
-                    .padding(.horizontal, Theme.screenHorizontal * 2)
-                    .padding(.bottom, Theme.screenBottom + 24)
-                }
-                .padding(.horizontal, Theme.screenHorizontal * 2)
-            }
-    }
-}
-

@@ -98,7 +98,11 @@ struct PlaidLinkView: SwiftUI.View {
                 await MainActor.run {
                     switch error {
                     case .transport:
+                        #if DEBUG
                         errorMessage = "서버에 연결할 수 없어요. 백엔드(localhost:3000)가 실행 중인지 확인해 주세요."
+                        #else
+                        errorMessage = "서버에 연결할 수 없어요. 네트워크를 확인하거나 잠시 후 다시 시도해 주세요."
+                        #endif
                     case .serverStatus(let code):
                         errorMessage = code == 401 ? "로그인이 필요해요." : "서버 오류예요. (\(code))"
                     case .decoding, .invalidURL:
@@ -154,8 +158,8 @@ struct PlaidLinkView: SwiftUI.View {
         configuration.onExit = { linkExit in
             Task { @MainActor in
                 if let err = linkExit.error {
-                    let msg = err.displayMessage ?? ""
-                    errorMessage = msg.isEmpty ? (err.errorMessage ?? "연결이 중단되었어요.") : msg
+                    let msg = (err.displayMessage as String?) ?? ""
+                    errorMessage = msg.isEmpty ? ((err.errorMessage as String?) ?? "연결이 중단되었어요.") : msg
                 }
                 linkHandler = nil
             }
