@@ -63,3 +63,37 @@ enum BudgetCategory: String, CaseIterable, Identifiable, Codable, Hashable {
     var displayLabelKR: String { "\(emoji) \(displayNameKR)" }
 }
 
+extension BudgetCategory {
+    init(fromServer raw: String?) {
+        let v = (raw ?? "others").lowercased()
+        switch v {
+        case "income":
+            self = .income
+        case "transportation":
+            self = .transportation
+        case "rent":
+            self = .rent
+        case "utilities", "util":
+            self = .utilities
+        case "cafe", "coffee":
+            self = .cafe
+        case "food":
+            self = .food
+        case "grocery", "groceries":
+            self = .grocery
+        case "general merchandise":
+            self = .generalMerchandise
+        case "personal care", "personalcare":
+            self = .personalCare
+        case "medical":
+            self = .medical
+        case "entertainment", "subscription":
+            self = .entertainment
+        case "general services":
+            self = .generalServices
+        default:
+            self = .others
+        }
+    }
+}
+

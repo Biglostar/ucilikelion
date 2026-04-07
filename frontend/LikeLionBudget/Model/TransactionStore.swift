@@ -15,84 +15,19 @@ final class TransactionStore: ObservableObject {
 
     private let cal: Calendar = MockData.usCalendar
     private var _realTransactions: [Transaction] = []
-    private var _tutorialTransactions: [Transaction] = []
-    private let api = APIClient()
-    private weak var onboardingStore: OnboardingStore?
-    private var cancellable: AnyCancellable?
-    private var plaidSyncObserver: Any?
+
+    // [백엔드 연동] 발표 후 API 사용 시 아래 주석 해제
+    // private let api = APIClient()
+    // private var plaidSyncObserver: Any?
 
     // MARK: - Init / Lifecycle
 
     init() {
-        _realTransactions = []
-        _tutorialTransactions = Self.buildTutorialMockTransactions()
+        _realTransactions = MockData.realModeTransactionList()
         transactions = _realTransactions
-        Task {
-            await loadRemoteTransactionsIfNeeded()
-        }
-        plaidSyncObserver = NotificationCenter.default.addObserver(
-            forName: .plaidDidSync,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                await self?.loadRemoteTransactionsIfNeeded()
-            }
-        }
-    }
-
-    deinit {
-        if let o = plaidSyncObserver {
-            NotificationCenter.default.removeObserver(o)
-        }
-    }
-
-    // MARK: - Onboarding
-
-    func bindOnboarding(_ store: OnboardingStore) {
-        guard onboardingStore == nil else { return }
-        onboardingStore = store
-        refreshDisplayedTransactions()
-        cancellable = store.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.refreshDisplayedTransactions()
-            }
-    }
-
-    private var showTutorialData: Bool {
-        onboardingStore?.showTutorialSeedData ?? false
-    }
-
-    private func refreshDisplayedTransactions() {
-        transactions = showTutorialData ? _tutorialTransactions : _realTransactions
-    }
-
-    // MARK: - Remote Load / Refresh
-
-    private func loadRemoteTransactionsIfNeeded() async {
-        guard !showTutorialData else { return }
-        do {
-            let backendItems = try await api.fetchTransactions()
-            let mapped = backendItems.map { dto in
-                let amount = dto.type.uppercased() == "EXPENSE" && dto.amountCents > 0
-                    ? -dto.amountCents
-                    : dto.amountCents
-                return Transaction(
-                    date: ISO8601DateFormatter().date(from: dto.occurredAt) ?? Date(),
-                    title: dto.title,
-                    amountCents: amount,
-                    category: dto.category,
-                    merchant: dto.note,
-                    isFixed: dto.isFixed,
-                    backendId: dto.id
-                )
-            }
-            _realTransactions = mapped.sorted { $0.date > $1.date }
-            transactions = _realTransactions
-        } catch {
-            print("⚠️ Failed to load transactions from backend:", error)
-        }
+        // [백엔드 연동] API에서 거래 불러오기:
+        // Task { await loadRemoteTransactionsIfNeeded() }
+        // plaidSyncObserver = NotificationCenter.default.addObserver(forName: .plaidDidSync, ...) { await self?.loadRemoteTransactionsIfNeeded() }
     }
 
     // MARK: - 날짜별 거래
@@ -103,7 +38,7 @@ final class TransactionStore: ObservableObject {
     }
 
     func netCents(on date: Date) -> Int {
-        transactionsForDate(date).reduce(0) { $0 + $1.amountCents         }
+        transactionsForDate(date).reduce(0) { $0 + $1.amountCents }
     }
 
     // MARK: - 추가
@@ -123,87 +58,38 @@ final class TransactionStore: ObservableObject {
             merchant: merchant,
             isFixed: isFixed
         )
-        if showTutorialData {
-            _tutorialTransactions.insert(tx, at: 0)
-            _tutorialTransactions.sort { $0.date > $1.date }
-            transactions = _tutorialTransactions
-        } else {
-            _realTransactions.insert(tx, at: 0)
-            _realTransactions.sort { $0.date > $1.date }
-            transactions = _realTransactions
-
-            Task {
-                do {
-                    _ = try await api.createTransaction(
-                        title: title,
-                        amountCents: amountCents,
-                        type: amountCents >= 0 ? "INCOME" : "EXPENSE",
-                        category: category,
-                        occurredAt: date,
-                        isFixed: isFixed,
-                        note: merchant
-                    )
-                    await loadRemoteTransactionsIfNeeded()
-                } catch {
-                    print("⚠️ Failed to post transaction to backend:", error)
-                }
-            }
-        }
+        _realTransactions.insert(tx, at: 0)
+        _realTransactions.sort { $0.date > $1.date }
+        transactions = _realTransactions
+        // [백엔드 연동] POST 후 목록 다시 로드:
+        // Task { _ = try? await api.createTransaction(...); await loadRemoteTransactionsIfNeeded() }
     }
 
     // MARK: - 수정
     func updateTransaction(_ updated: Transaction) {
-        if showTutorialData {
-            guard let idx = _tutorialTransactions.firstIndex(where: { $0.id == updated.id }) else { return }
-            _tutorialTransactions[idx] = updated
-            _tutorialTransactions.sort { $0.date > $1.date }
-            transactions = _tutorialTransactions
-        } else {
-            guard let idx = _realTransactions.firstIndex(where: { $0.id == updated.id }) else { return }
-            _realTransactions[idx] = updated
-            _realTransactions.sort { $0.date > $1.date }
-            transactions = _realTransactions
-            // 추후에 백엔드 PUT(수정) 추가되면 다시
-        }
+        guard let idx = _realTransactions.firstIndex(where: { $0.id == updated.id }) else { return }
+        _realTransactions[idx] = updated
+        _realTransactions.sort { $0.date > $1.date }
+        transactions = _realTransactions
     }
 
     // MARK: - 삭제
     func deleteTransaction(id: UUID) {
-        if showTutorialData {
-            _tutorialTransactions.removeAll { $0.id == id }
-            transactions = _tutorialTransactions
-        } else {
-            guard let tx = _realTransactions.first(where: { $0.id == id }),
-                  let backendId = tx.backendId else {
-                _realTransactions.removeAll { $0.id == id }
-                transactions = _realTransactions
-                return
-            }
-            _realTransactions.removeAll { $0.id == id }
-            transactions = _realTransactions
-            Task {
-                do {
-                    try await api.deleteTransaction(id: backendId)
-                } catch {
-                    print("⚠️ Failed to delete transaction on backend:", error)
-                }
-            }
-        }
+        _realTransactions.removeAll { $0.id == id }
+        transactions = _realTransactions
+        // [백엔드 연동] backendId 있으면: Task { try? await api.deleteTransaction(id: backendId) }
     }
 
-    // MARK: - 튜토리얼 전용 Mock
-
-    private static func buildTutorialMockTransactions() -> [Transaction] {
-        let cal = MockData.usCalendar
-        var list: [Transaction] = []
-        let today = Date()
-        for offset in 0..<90 {
-            guard let d = cal.date(byAdding: .day, value: -offset, to: today) else { continue }
-            list.append(contentsOf: MockData.transactions(for: d))
-        }
-        list.sort { $0.date > $1.date }
-        return list
+    // MARK: - [백엔드 연동] 아래 메서드들 주석 해제 후 init에서 loadRemote 호출, addTransaction/deleteTransaction에 API 호출 추가
+    /*
+    private static func parseOccurredAt(_ occurredAt: String) -> Date { ... }
+    private func loadRemoteTransactionsIfNeeded() async {
+        let backendItems = try await api.fetchTransactions()
+        let mapped = backendItems.map { dto in Transaction(...) }
+        _realTransactions = mapped.sorted { $0.date > $1.date }
+        transactions = _realTransactions
     }
+    */
 }
 
 // MARK: - Notifications

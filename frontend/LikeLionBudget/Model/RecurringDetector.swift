@@ -137,7 +137,7 @@ struct RecurringDetector {
         if t.contains("rent") || t.contains("utility") || t.contains("internet") || t.contains("electric") {
             return "Rent & Utilities"
         }
-        if t.contains("netflix") || t.contains("spotify") || t.contains("icloud") || t.contains("subscription") || t.contains("hulu") || t.contains("prime") {
+        if t.contains("netflix") || t.contains("spotify") || t.contains("youtube") || t.contains("icloud") || t.contains("subscription") || t.contains("hulu") || t.contains("prime") {
             return "Subscription"
         }
         return "기타 고정지출"

@@ -6,11 +6,9 @@
 //
 
 import SwiftUI
-import UIKit
 
 struct HomeView: View {
 
-    @EnvironmentObject private var onboardingStore: OnboardingStore
     @ObservedObject var store: TransactionStore
     @ObservedObject var goalsStore: GoalsStore
     var aiSpeechMent: String? = nil
@@ -21,9 +19,6 @@ struct HomeView: View {
     @State private var selectedGoalID: UUID? = nil
     @State private var month: Date = Date()
     @State private var selectedDayForSheet: SelectedDay? = nil
-    @State private var onboardingFrames: [Int: [CGRect]] = [:]
-    @State private var tutorialLayoutSeed: Int = 0
-    @State private var showOverlayForStep1: Bool = false
     @State private var dashboard: APIClient.DashboardResponse? = nil
     @State private var selectedDashboardGoalIndex: Int = 0
 
@@ -34,39 +29,15 @@ struct HomeView: View {
         return characterSpendingLevel ?? 0
     }
 
-    private var shouldShowStepOverlay: Bool {
-        let step = onboardingStore.currentStep
-        return (2...5).contains(step) || (step == 1 && showOverlayForStep1)
-    }
-
     // MARK: - Body
 
     var body: some View {
         ZStack {
             Theme.beige.ignoresSafeArea()
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    homeScrollContent
-                }
-                .onChange(of: onboardingStore.currentStep) { _, step in
-                    handleOnboardingStepChange(step: step, proxy: proxy)
-                }
+            ScrollView {
+                homeScrollContent
             }
-        }
-        .onPreferenceChange(OnboardingFramePreferenceKey.self) { value in
-            onboardingFrames = value
-            onboardingStore.mergeOnboardingFrames(value)
-        }
-        .onChange(of: onboardingStore.requestOpenDayDetailAt) { _, date in
-            if let d = date {
-                selectedDayForSheet = SelectedDay(date: d)
-                onboardingStore.requestOpenDayDetailAt = nil
-            }
-        }
-        .onChange(of: onboardingStore.currentStep) { _, step in
-            if step == 8 { selectedDayForSheet = nil }
-            if (1...5).contains(step) { selectedDayForSheet = nil }
         }
         .onAppear {
             if selectedGoalID == nil {
@@ -74,33 +45,8 @@ struct HomeView: View {
             }
             loadDashboard()
         }
-        .overlay {
-            if onboardingStore.isTutorialActive && onboardingStore.currentStep == 0 {
-                PreTutorialWelcomeOverlay(onStart: {
-                    withAnimation(.easeInOut(duration: 0.25)) { onboardingStore.advance() }
-                })
-                .ignoresSafeArea()
-            }
-        }
-        .onChange(of: onboardingStore.currentStep) { _, newStep in
-            if newStep == 1 {
-                showOverlayForStep1 = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { tutorialLayoutSeed += 1 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) { tutorialLayoutSeed += 1 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) { tutorialLayoutSeed += 1 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { tutorialLayoutSeed += 1 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.68) { tutorialLayoutSeed += 1 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.82) { showOverlayForStep1 = true }
-            } else {
-                showOverlayForStep1 = false
-            }
-            if (1...5).contains(newStep) && (onboardingStore.collectedOnboardingFrames[newStep] ?? []).isEmpty {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { tutorialLayoutSeed += 1 }
-            }
-        }
         .sheet(item: $selectedDayForSheet) { item in
             DayDetailSheetContainer(date: item.date, store: store)
-                .environmentObject(onboardingStore)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.white)
@@ -112,7 +58,6 @@ struct HomeView: View {
         VStack(spacing: 0) {
             headerSection
                 .background(Theme.beige)
-                .id("onboardingTop")
 
             VStack(spacing: Theme.Home.gapGoalToCalendar) {
                 VStack(spacing: Theme.Home.gapInsideGoalPage) {
@@ -138,34 +83,14 @@ struct HomeView: View {
                         )
                     }
                 }
-                .onboardingFrame(stepId: 4)
 
                 MonthCalendarView(month: $month, store: store, selectedDay: $selectedDayForSheet)
                     .padding(.vertical, Theme.Home.calendarVerticalPadding)
-                    .onboardingFrame(stepId: 5)
-                    .id("onboardingCalendar")
             }
             .padding(.horizontal, Theme.Home.goalCalendarHorizontal)
             .padding(.top, Theme.Home.gapHeaderToGoalBlock)
             .padding(.bottom, Theme.screenBottom)
             .background(Color.white)
-        }
-        .id(tutorialLayoutSeed)
-    }
-
-    private func handleOnboardingStepChange(step: Int, proxy: ScrollViewProxy) {
-        if step == 5 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    proxy.scrollTo("onboardingCalendar", anchor: .center)
-                }
-            }
-        } else if (1...4).contains(step) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.easeInOut(duration: 0.35)) {
-                    proxy.scrollTo("onboardingTop", anchor: .top)
-                }
-            }
         }
     }
 
@@ -196,7 +121,6 @@ struct HomeView: View {
                     .scaleEffect(effectiveCharacterLevel == 0 ? Theme.Home.characterLevel0Scale : 1.0)
                     .frame(width: w, height: imageH)
                     .clipped()
-                    .onboardingFrame(stepId: 3)
                     .overlay {
                         SpeechBubbleView(text: speechTextMonthOnly)
                             .frame(width: w * Theme.Home.bubbleWidthRatio)
@@ -206,37 +130,12 @@ struct HomeView: View {
                         BubbleTailDots()
                             .position(x: w * CGFloat(layout.tailX), y: imageH * CGFloat(layout.tailY))
                     }
-                    .overlay {
-                        GeometryReader { overlayGeo in
-                            let w = overlayGeo.size.width
-                            let h = overlayGeo.size.height
-                            let g = overlayGeo.frame(in: .global)
-                            let bubbleW = w * Theme.Home.bubbleWidthRatio
-                            let bubbleH: CGFloat = 56
-                            let bubbleInset: CGFloat = 5
-                            let bubbleCutoutW = max(1, bubbleW - bubbleInset * 2)
-                            let bubbleCutoutH = max(1, bubbleH - bubbleInset * 2)
-                            let bubbleGlobal = CGRect(
-                                x: g.minX + w * CGFloat(layout.bubbleX) - bubbleCutoutW / 2,
-                                y: g.minY + h * CGFloat(layout.bubbleY) - bubbleCutoutH / 2,
-                                width: bubbleCutoutW,
-                                height: bubbleCutoutH
-                            )
-                            let tx = g.minX + w * CGFloat(layout.tailX)
-                            let ty = g.minY + h * CGFloat(layout.tailY)
-                            let tail1Global = CGRect(x: tx + 4 - 9, y: ty - 5 - 4.5, width: 18, height: 9)
-                            let tail2Global = CGRect(x: tx - 9 - 6, y: ty + 5 - 2.5, width: 12, height: 5)
-                            Color.clear
-                                .preference(key: OnboardingFramePreferenceKey.self, value: [2: [bubbleGlobal, tail1Global, tail2Global]])
-                        }
-                    }
                 }
                 .frame(height: imageH)
                 .clipped()
 
                 SpendMonthOnlyView(monthAmount: totalSpendTextThisMonth())
                     .frame(height: Theme.Home.spendAreaHeight)
-                    .onboardingFrame(stepId: 1)
                     .background(Theme.beige)
             }
             .coordinateSpace(name: "homeHeaderGlobal")
@@ -285,14 +184,16 @@ struct HomeView: View {
     }
 
     private func loadDashboard() {
+        // 로컬 MockData만 사용. 발표 후 백엔드 연동 시 아래 주석 해제.
+        dashboard = nil
+        /*
         Task {
             do {
                 let d = try await APIClient().fetchDashboard()
                 await MainActor.run { dashboard = d }
-            } catch {
-                // 오프라인/백엔드 미동작 시 로컬 계산 유지
-            }
+            } catch { }
         }
+        */
     }
 
     private static func characterLevel(from status: String) -> Int {
@@ -683,43 +584,3 @@ private struct GoalProgressPage: View {
     }
 }
 
-// MARK: - 튜토리얼 시작 전 환영 화면
-
-private struct PreTutorialWelcomeOverlay: View {
-    let onStart: () -> Void
-
-    var body: some View {
-        Color.black.opacity(0.80)
-            .ignoresSafeArea()
-            .overlay {
-                VStack(spacing: Theme.spacingSection) {
-                    Spacer()
-                    Text("꼽주머니에 오신 걸 환영해요.")
-                        .font(.custom(Theme.fontLaundry, size: Theme.titleSize))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                    Text("실제 연결 전, 데모 데이터를 통해\n앱의 주요 기능을 먼저 확인해보세요.")
-                        .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(4)
-                    Spacer()
-                    Text("화면 오른쪽을 누르면 다음, 왼쪽을 누르면 이전으로 이동해요.")
-                        .font(.custom(Theme.fontLaundry, size: Theme.smallBodySize))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, Theme.screenHorizontal)
-                    Text("← 이전 | 다음 →")
-                        .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
-                        .foregroundStyle(.white.opacity(0.5))
-                    Text("터치하여 시작")
-                        .font(.custom(Theme.fontLaundry, size: Theme.smallBodySize))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .padding(.bottom, Theme.screenBottom + 72)
-                }
-                .padding(.horizontal, Theme.screenHorizontal * 2)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onStart)
-    }
-}

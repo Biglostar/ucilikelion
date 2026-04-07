@@ -45,14 +45,10 @@
 		B0FA95682F2FE5DB009D6BDB /* PaymentRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95672F2FE5DB009D6BDB /* PaymentRail.swift */; };
 		B0FA95692F2FE701009D6BDB /* View+FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA956A2F2FE701009D6BDB /* View+FlowLayout.swift */; };
 		B0FA95712F2F4A01009D6BDB /* HomeBubbleLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95702F2F4A00009D6BDB /* HomeBubbleLayout.swift */; };
-		B0FA95812F300001009D6BDB /* OnboardingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95802F300001009D6BDB /* OnboardingStore.swift */; };
-		B0FA95832F300002009D6BDB /* OnboardingWelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95822F300002009D6BDB /* OnboardingWelcomeView.swift */; };
-		B0FA95852F300003009D6BDB /* OnboardingOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95842F300003009D6BDB /* OnboardingOverlayView.swift */; };
 		B0FA95872F300005009D6BDB /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95882F300005009D6BDB /* LoginView.swift */; };
 		B0FA958A2F300007009D6BDB /* PlaidIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA958B2F300007009D6BDB /* PlaidIntroView.swift */; };
 		B0FA958E2F30000B009D6BDB /* PlaidLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA958F2F30000C009D6BDB /* PlaidLinkView.swift */; };
 		B0FA95902F30000D009D6BDB /* TermsAndConsentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95912F30000E009D6BDB /* TermsAndConsentView.swift */; };
-		B0FA95922F30000C009D6BDB /* TutorialScreenshotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95932F30000D009D6BDB /* TutorialScreenshotView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -93,14 +89,10 @@
 		B0FA95672F2FE5DB009D6BDB /* PaymentRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentRail.swift; sourceTree = "<group>"; };
 		B0FA956A2F2FE701009D6BDB /* View+FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+FlowLayout.swift"; sourceTree = "<group>"; };
 		B0FA95702F2F4A00009D6BDB /* HomeBubbleLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeBubbleLayout.swift; sourceTree = "<group>"; };
-		B0FA95802F300001009D6BDB /* OnboardingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStore.swift; sourceTree = "<group>"; };
-		B0FA95822F300002009D6BDB /* OnboardingWelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWelcomeView.swift; sourceTree = "<group>"; };
-		B0FA95842F300003009D6BDB /* OnboardingOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingOverlayView.swift; sourceTree = "<group>"; };
 		B0FA95882F300005009D6BDB /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		B0FA958B2F300007009D6BDB /* PlaidIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaidIntroView.swift; sourceTree = "<group>"; };
 		B0FA958F2F30000C009D6BDB /* PlaidLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaidLinkView.swift; sourceTree = "<group>"; };
 		B0FA95912F30000E009D6BDB /* TermsAndConsentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsAndConsentView.swift; sourceTree = "<group>"; };
-		B0FA95932F30000D009D6BDB /* TutorialScreenshotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialScreenshotView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -172,7 +164,6 @@
 				B0FA953B2F2DFB55009D6BDB /* SettingStore.swift */,
 				B0FA95412F2E9B01009D6BDB /* IncomeExpenseSegment.swift */,
 				B0FA95672F2FE5DB009D6BDB /* PaymentRail.swift */,
-				B0FA95802F300001009D6BDB /* OnboardingStore.swift */,
 			);
 			path = Model;
 			sourceTree = "<group>";
@@ -183,7 +174,6 @@
 				B0FA95292F22C9A7009D6BDB /* View+CardStyle.swift */,
 				B0FA956A2F2FE701009D6BDB /* View+FlowLayout.swift */,
 				B0FA950C2F219466009D6BDB /* RootTabView.swift */,
-				B0FA95862F300004009D6BDB /* Onboarding */,
 				B0FA95892F300006009D6BDB /* Auth */,
 				B0B398C12F17456C000E1463 /* Calendar */,
 				B0B398C02F174566000E1463 /* Home */,
@@ -254,16 +244,6 @@
 				B0FA95172F219877009D6BDB /* SettingsView.swift */,
 			);
 			path = Settings;
-			sourceTree = "<group>";
-		};
-		B0FA95862F300004009D6BDB /* Onboarding */ = {
-			isa = PBXGroup;
-			children = (
-				B0FA95822F300002009D6BDB /* OnboardingWelcomeView.swift */,
-				B0FA95842F300003009D6BDB /* OnboardingOverlayView.swift */,
-				B0FA95932F30000D009D6BDB /* TutorialScreenshotView.swift */,
-			);
-			path = Onboarding;
 			sourceTree = "<group>";
 		};
 		B0FA95892F300006009D6BDB /* Auth */ = {
@@ -393,10 +373,6 @@
 				B0FA95602F2F408E009D6BDB /* SpeechBubbleView.swift in Sources */,
 				B0FA950B2F213D64009D6BDB /* GoalsStore.swift in Sources */,
 				B0B398C92F1782F4000E1463 /* MonthCalendarView.swift in Sources */,
-				B0FA95812F300001009D6BDB /* OnboardingStore.swift in Sources */,
-				B0FA95832F300002009D6BDB /* OnboardingWelcomeView.swift in Sources */,
-				B0FA95852F300003009D6BDB /* OnboardingOverlayView.swift in Sources */,
-				B0FA95922F30000C009D6BDB /* TutorialScreenshotView.swift in Sources */,
 				B0FA95872F300005009D6BDB /* LoginView.swift in Sources */,
 				B0FA958A2F300007009D6BDB /* PlaidIntroView.swift in Sources */,
 				B0FA958E2F30000B009D6BDB /* PlaidLinkView.swift in Sources */,

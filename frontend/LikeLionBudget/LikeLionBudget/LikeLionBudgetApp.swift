@@ -11,7 +11,6 @@ import GoogleSignIn
 
 @main
 struct LikeLionBudgetApp: App {
-    @StateObject private var onboardingStore = OnboardingStore()
     @StateObject private var settingsStore = SettingsStore()
 
     init() {
@@ -23,7 +22,6 @@ struct LikeLionBudgetApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(onboardingStore)
                 .environmentObject(settingsStore)
                 .onOpenURL { url in
                     GIDSignIn.sharedInstance.handle(url)

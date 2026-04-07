@@ -57,13 +57,6 @@ struct AddGoalView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
                             categoryChips
-
-                            Text("AI가 지난 소비 패턴 바탕으로 목표치를 설정해 줘요")
-                                .font(.caption)
-                                .foregroundStyle(Theme.text.opacity(0.7))
-                                .multilineTextAlignment(.center)
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 4)
                         }
                         .padding(.vertical, 4)
 
@@ -105,6 +98,8 @@ struct AddGoalView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Color.white)
+            .toolbarBackground(Color.white, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(isEditMode ? "목표 수정" : "새로운 목표")
@@ -131,6 +126,7 @@ struct AddGoalView: View {
                     category = g.category
                 }
             }
+            .background(Color.white.ignoresSafeArea())
         }
     }
 

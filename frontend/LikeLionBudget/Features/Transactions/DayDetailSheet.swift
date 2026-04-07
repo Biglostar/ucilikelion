@@ -6,15 +6,11 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct DayDetailSheet: View {
-    @EnvironmentObject private var onboardingStore: OnboardingStore
     let date: Date
     @ObservedObject var store: TransactionStore
-
-    // MARK: - State & Layout
-
-    @State private var onboardingFrames: [Int: [CGRect]] = [:]
 
     private var cardCorner: CGFloat { Theme.cardCorner }
 
@@ -31,7 +27,6 @@ struct DayDetailSheet: View {
     }
 
     @State private var activeSheet: ActiveSheet? = nil
-    @State private var didOpenAddForOnboarding: Bool = false
 
     private var transactions: [Transaction] {
         store.transactionsForDate(date)
@@ -55,24 +50,18 @@ struct DayDetailSheet: View {
         transactions.filter { $0.amountCents < 0 }.reduce(0) { $0 + abs($1.amountCents) }
     }
 
-    // MARK: - Body
-
     private var netCents: Int {
         transactions.reduce(0) { $0 + $1.amountCents }
     }
 
     var body: some View {
-        ZStack {
-            sheetContent
-            onboardingOverlayIfNeeded
-        }
+        sheetContent
     }
 
     private var sheetContent: some View {
         NavigationStack {
             mainList
         }
-        .onPreferenceChange(OnboardingFramePreferenceKey.self) { onboardingFrames = $0 }
         .scrollContentBackground(.hidden)
         .background(Color.white)
         .navigationBarTitleDisplayMode(.inline)
@@ -99,50 +88,11 @@ struct DayDetailSheet: View {
                     .contentShape(Circle())
                     .clipShape(Circle())
                     .layoutPriority(1)
-                    .overlay(
-                        GeometryReader { geo in
-                            // Compute a slightly inset circle rect to match the visible button fill (avoid outer clip stroke area)
-                            let g = geo.frame(in: .global)
-                            let inset: CGFloat = 2
-                            let size: CGFloat = max(1, min(g.width, g.height) - inset * 2)
-                            let rect = CGRect(
-                                x: g.midX - size / 2,
-                                y: g.midY - size / 2,
-                                width: size,
-                                height: size
-                            )
-                            Color.clear.preference(
-                                key: OnboardingFramePreferenceKey.self,
-                                value: [6: [rect]]
-                            )
-                        }
-                    )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .onAppear {
-            if onboardingStore.requestShowAddTransaction {
-                activeSheet = .add
-                didOpenAddForOnboarding = true
-                onboardingStore.requestShowAddTransaction = false
-            }
-        }
-        .onChange(of: onboardingStore.requestShowAddTransaction) { _, requested in
-            if requested {
-                activeSheet = .add
-                didOpenAddForOnboarding = true
-                onboardingStore.requestShowAddTransaction = false
-            }
-        }
-        .sheet(item: $activeSheet, onDismiss: {
-            if onboardingStore.addTransactionSheetOpenedForStep6 {
-                onboardingStore.advanceFromAddTransactionSheet()
-            }
-            if didOpenAddForOnboarding {
-                didOpenAddForOnboarding = false
-            }
-        }) { sheetItem in
+        .sheet(item: $activeSheet) { sheetItem in
             sheetContentFor(sheetItem: sheetItem)
         }
     }
@@ -151,23 +101,11 @@ struct DayDetailSheet: View {
     private func sheetContentFor(sheetItem: ActiveSheet) -> some View {
         switch sheetItem {
         case .add:
-            ZStack(alignment: .bottom) {
-                TransactionEditorView(mode: .add(date: date), store: store)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(.white)
-                    .presentationCornerRadius(Theme.sheetCornerRadius)
-                if didOpenAddForOnboarding {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture { activeSheet = nil }
-                    Text("아무 곳이나 탭하면 다음으로 넘어갑니다")
-                        .font(.custom(Theme.fontLaundry, size: Theme.smallBodySize))
-                        .foregroundStyle(Theme.text.opacity(0.5))
-                        .padding(.bottom, Theme.screenBottom + 8)
-                }
-            }
-            .interactiveDismissDisabled(didOpenAddForOnboarding)
+            TransactionEditorView(mode: .add(date: date), store: store)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.white)
+                .presentationCornerRadius(Theme.sheetCornerRadius)
         case .edit(let tx):
             TransactionEditorView(mode: .edit(tx: tx), store: store)
                 .presentationDetents([.large])
@@ -238,7 +176,6 @@ struct DayDetailSheet: View {
                 .font(.custom(Theme.fontLaundry, size: Theme.dateLabelSize))
                 .foregroundStyle(Theme.text.opacity(0.6))
                 .listRowBackground(Color.white)
-                .onboardingFrame(stepId: 7)
         } else {
             ForEach(transactions) { tx in
                 transactionRow(tx)
@@ -289,30 +226,7 @@ struct DayDetailSheet: View {
         .onTapGesture { activeSheet = .edit(tx) }
         .listRowInsets(EdgeInsets(top: Theme.listRowInsetVerticalCompact, leading: Theme.listRowInsetHorizontal, bottom: Theme.listRowInsetVerticalCompact, trailing: Theme.listRowInsetHorizontal))
         .listRowBackground(Color.white)
-        .onboardingFrame(stepId: 7)
     }
-
-    private var isAddTransactionSheetPresented: Bool {
-        if case .add = activeSheet { return true }
-        return false
-    }
-
-    @ViewBuilder
-    private var onboardingOverlayIfNeeded: some View {
-        if onboardingStore.isTutorialActive, onboardingStore.currentStep == 6 || onboardingStore.currentStep == 7 {
-            GeometryReader { g in
-                OnboardingOverlayView(
-                    store: onboardingStore,
-                    frames: onboardingFrames,
-                    screenSize: g.size
-                )
-                .frame(width: g.size.width, height: g.size.height)
-            }
-            .ignoresSafeArea(.all)
-        }
-    }
-
-    // MARK: - Headers
 
     private var summaryHeader: some View {
         Text("요약")
@@ -324,10 +238,7 @@ struct DayDetailSheet: View {
         Text("거래 내역")
             .font(.custom(Theme.fontLaundry, size: 16))
             .foregroundStyle(Theme.text)
-            .onboardingFrame(stepId: 7)
     }
-
-    // MARK: - Helpers
 
     private func moneyNoPlus(_ cents: Int) -> String {
         Money.usdSignedString(fromCents: cents).replacingOccurrences(of: "+", with: "")

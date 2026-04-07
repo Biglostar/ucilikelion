@@ -7,6 +7,18 @@
 
 import Foundation
 
+// MARK: - API Base URL
+
+/// 발표 후 백엔드 연동 시: TransactionStore/GoalsStore/HomeView에서 [백엔드 연동] 주석 해제하고,
+/// 아래 baseURLString을 실제 서버 URL로 변경.
+enum APIConfig {
+    #if DEBUG
+    static let baseURLString = "https://090cca8b-8fed-4588-a62a-e15abe586692.mock.pstmn.io/api"
+    #else
+    static let baseURLString = "https://your-api-server.com/api"
+    #endif
+}
+
 // MARK: - API Error
 
 enum APIError: Error {
@@ -32,7 +44,7 @@ enum UserIdentity {
 }
 
 struct APIClient {
-    private let baseURL = URL(string: "http://localhost:3000/api")!
+    private let baseURL = URL(string: APIConfig.baseURLString)!
 
     private let isoDateTime: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -51,6 +63,46 @@ struct APIClient {
         let occurredAt: String
         let isFixed: Bool
         let note: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, title, amountCents, type, category, occurredAt, isFixed, note
+        }
+
+        init(id: String, title: String, amountCents: Int, type: String, category: BudgetCategory, occurredAt: String, isFixed: Bool, note: String?) {
+            self.id = id
+            self.title = title
+            self.amountCents = amountCents
+            self.type = type
+            self.category = category
+            self.occurredAt = occurredAt
+            self.isFixed = isFixed
+            self.note = note
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            title = try c.decode(String.self, forKey: .title)
+            amountCents = try c.decode(Int.self, forKey: .amountCents)
+            type = try c.decode(String.self, forKey: .type)
+            let rawCategory = try c.decodeIfPresent(String.self, forKey: .category)
+            category = BudgetCategory(fromServer: rawCategory)
+            occurredAt = try c.decode(String.self, forKey: .occurredAt)
+            isFixed = try c.decode(Bool.self, forKey: .isFixed)
+            note = try c.decodeIfPresent(String.self, forKey: .note)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(id, forKey: .id)
+            try c.encode(title, forKey: .title)
+            try c.encode(amountCents, forKey: .amountCents)
+            try c.encode(type, forKey: .type)
+            try c.encode(category.rawValue, forKey: .category)
+            try c.encode(occurredAt, forKey: .occurredAt)
+            try c.encode(isFixed, forKey: .isFixed)
+            try c.encodeIfPresent(note, forKey: .note)
+        }
     }
 
     struct BackendGoal: Codable {
@@ -60,11 +112,101 @@ struct APIClient {
         let icon: String?
         let category: BudgetCategory
         let monthlyBudgetCents: Int
-        let startDate: String
-        let endDate: String
+        let startDate: String?
+        let endDate: String?
         let spentPct: Double
         let remainingPct: Double
         let overBudget: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case id, title, memo, icon, category
+            case monthlyBudgetCents
+            case monthly_budget = "monthly_budget"
+            case startDate
+            case start_date = "start_date"
+            case endDate
+            case end_date = "end_date"
+            case spentPct
+            case remainingPct
+            case percentage = "percentage"
+            case overBudget
+            case current_spent = "current_spent"
+        }
+
+        init(
+            id: String,
+            title: String,
+            memo: String?,
+            icon: String?,
+            category: BudgetCategory,
+            monthlyBudgetCents: Int,
+            startDate: String?,
+            endDate: String?,
+            spentPct: Double,
+            remainingPct: Double,
+            overBudget: Bool
+        ) {
+            self.id = id
+            self.title = title
+            self.memo = memo
+            self.icon = icon
+            self.category = category
+            self.monthlyBudgetCents = monthlyBudgetCents
+            self.startDate = startDate
+            self.endDate = endDate
+            self.spentPct = spentPct
+            self.remainingPct = remainingPct
+            self.overBudget = overBudget
+        }
+
+        /// JSON에서 70(정수) 또는 70.0(실수) 둘 다 받기 위함
+        private static func decodeDouble(from c: KeyedDecodingContainer<BackendGoal.CodingKeys>, forKey key: BackendGoal.CodingKeys) -> Double? {
+            if let i = try? c.decodeIfPresent(Int.self, forKey: key) { return Double(i) }
+            return try? c.decodeIfPresent(Double.self, forKey: key)
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+            memo = try c.decodeIfPresent(String.self, forKey: .memo)
+            icon = try c.decodeIfPresent(String.self, forKey: .icon)
+            let rawCategory = try c.decodeIfPresent(String.self, forKey: .category)
+            category = BudgetCategory(fromServer: rawCategory)
+            let budget: Int
+            if let v = try c.decodeIfPresent(Int.self, forKey: .monthlyBudgetCents) {
+                budget = v
+            } else if let v = try c.decodeIfPresent(Double.self, forKey: .monthly_budget) {
+                budget = Int(v)
+            } else {
+                budget = 0
+            }
+            monthlyBudgetCents = budget
+            let start = try c.decodeIfPresent(String.self, forKey: .startDate)
+            let startAlt = try c.decodeIfPresent(String.self, forKey: .start_date)
+            startDate = start ?? startAlt
+            let end = try c.decodeIfPresent(String.self, forKey: .endDate)
+            let endAlt = try c.decodeIfPresent(String.self, forKey: .end_date)
+            endDate = end ?? endAlt
+            remainingPct = Self.decodeDouble(from: c, forKey: .remainingPct) ?? Self.decodeDouble(from: c, forKey: .percentage) ?? 0
+            spentPct = Self.decodeDouble(from: c, forKey: .spentPct) ?? 0
+            overBudget = try c.decodeIfPresent(Bool.self, forKey: .overBudget) ?? false
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(id, forKey: .id)
+            try c.encode(title, forKey: .title)
+            try c.encodeIfPresent(memo, forKey: .memo)
+            try c.encodeIfPresent(icon, forKey: .icon)
+            try c.encode(category.rawValue, forKey: .category)
+            try c.encode(monthlyBudgetCents, forKey: .monthlyBudgetCents)
+            try c.encodeIfPresent(startDate, forKey: .startDate)
+            try c.encodeIfPresent(endDate, forKey: .endDate)
+            try c.encode(spentPct, forKey: .spentPct)
+            try c.encode(remainingPct, forKey: .remainingPct)
+            try c.encode(overBudget, forKey: .overBudget)
+        }
     }
 
     struct PlaidLinkTokenResponse: Codable {
@@ -131,15 +273,16 @@ struct APIClient {
         return request
     }
 
+    private func sendData(_ request: URLRequest) async throws -> Data {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidURL }
+        guard (200..<300).contains(http.statusCode) else { throw APIError.serverStatus(http.statusCode) }
+        return data
+    }
+
     private func send<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T {
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                throw APIError.invalidURL
-            }
-            guard (200..<300).contains(http.statusCode) else {
-                throw APIError.serverStatus(http.statusCode)
-            }
+            let data = try await sendData(request)
             do {
                 return try JSONDecoder().decode(T.self, from: data)
             } catch {
@@ -261,12 +404,21 @@ struct APIClient {
         let endDate: String
     }
 
+    /// Mock/백엔드가 배열 `[...]` 또는 객체 `{ "goals": [...] }` 둘 다 허용
     func fetchGoals() async throws -> [BackendGoal] {
         let request = try makeRequest(
             path: "goals",
             method: "GET"
         )
-        return try await send(request, as: [BackendGoal].self)
+        let data = try await sendData(request)
+        if let wrapped = try? JSONDecoder().decode(GoalsResponseWrapper.self, from: data) {
+            return wrapped.goals
+        }
+        return try JSONDecoder().decode([BackendGoal].self, from: data)
+    }
+
+    private struct GoalsResponseWrapper: Decodable {
+        let goals: [BackendGoal]
     }
 
     func createGoal(
@@ -321,7 +473,6 @@ struct APIClient {
             method: "POST",
             body: body
         )
-        // We don't care about body; ensure status is OK
         _ = try await send(request, as: EmptyResponse.self)
     }
 
