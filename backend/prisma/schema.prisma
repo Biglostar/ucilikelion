@@ -5,8 +5,8 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
-  // output   = "../src/generated/prisma"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
@@ -45,17 +45,25 @@ enum BudgetSource {
 
 
 model User {
-  id         String     @id @default(uuid())
-  email      String     @unique
-  nickname   String
-  googleId  String?  @unique // Google 고유 ID 저장
+  id               String   @id @default(uuid())
+  email            String   @unique
+  nickname         String
+  googleId         String?  @unique
+  fcmToken         String?  
 
-  roastLevel RoastLevel @default(MILD)
+  roastLevel       RoastLevel @default(MILD)
 
-  plaidAccessToken String? // Store the permanent key here
+  plaidAccessToken String? 
 
-  goals        Goal[]
-  transactions Transaction[]
+  goals            Goal[]
+  transactions     Transaction[]
+
+  characterStatus  String   @default("RICH")
+  characterMessage String?  @default("Hi")
+  
+  totalMonthlyBudgetCents Int @default(1000000) 
+  
+  lastTotalAlertPct      Int @default(100) 
 
   monthlySummaries MonthlySummary[]
 

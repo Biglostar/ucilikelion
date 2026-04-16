@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from "../prisma";
+import { generateAiBudgetAnalysis } from '../services/aiService';
 // import { generateAiBudgetAnalysis } from '../services/aiService';
 // import { TransactionType } from '@prisma/client';
 
@@ -89,16 +90,36 @@ export async function getGoals(req: Request, res: Response) {
 // ai 합친 버전
 export async function createGoal(req: Request, res: Response) {
   try {
-    const userId = req.header("x-user-id");
-    const { title, category, monthlyBudgetCents, icon, memo, budgetSource } = req.body;
+    const userId = req.header("x-user-id") as string;
+    let { title, category, monthlyBudgetCents, icon, memo, budgetSource } = req.body;
 
-    // 이번 달 1일과 말일을 자동으로 계산
+    if (budgetSource === "AUTO_AVG_3M") {
+      const last3Months = [];
+      const now = new Date();
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        last3Months.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+      }
+
+      const historySummaries = await prisma.monthlySummary.findMany({
+        where: { userId, OR: last3Months }
+      });
+
+      const aiResult = await generateAiBudgetAnalysis(
+        category,
+        historySummaries.map(s => ({ month: `${s.month}월`, totalCents: s.totalSpentCents }))
+      );
+      
+      monthlyBudgetCents = aiResult.suggestedBudget;
+    }
+
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0); // 이번달 기준
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
     const goal = await prisma.goal.create({
       data: {
-        userId: userId as string,
+        userId,
         title,
         category,
         monthlyBudgetCents: Number(monthlyBudgetCents),

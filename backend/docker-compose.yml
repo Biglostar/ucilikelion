@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   postgres:
     image: postgres:15
@@ -11,6 +12,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
   backend:
     build: .
     env_file:
@@ -20,5 +22,9 @@ services:
     ports:
       - "3000:3000"
       - "5555:5555"
+    volumes:
+      - .:/usr/src/app
+      - ./src/config:/usr/src/app/src/config
+
 volumes:
   postgres_data:

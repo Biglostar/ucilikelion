@@ -1,11 +1,10 @@
 import { RoastLevel } from "@prisma/client";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-console.log("CHECK API KEY:", process.env.GEMINI_API_KEY ? "Loaded" : "Not Loaded");
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-export async function generateNaggingMessage(
+export async function generateNaggingMessage( // 월 소비
   category: string,
   checkpoint: number,
   level: RoastLevel
@@ -17,9 +16,9 @@ export async function generateNaggingMessage(
     Tone Intensity: ${level} (This is the user's chosen "Roast Level")
 
     Level-Specific Instructions:
-    1. MILD: Sarcastic but still advice-oriented. Like a friend shaking their head. (e.g., "75% 남았는데 벌써 그렇게 써?")
-    2. MEDIUM: Direct sarcasm. Make the user feel pathetic. (e.g., "네 통장은 이미 울고 있어.")
-    3. SPICY: Extremely aggressive and rude. Criticize the user's lack of self-control. (e.g., "거지 되려고 작정했냐?")
+    1. MILD: Sarcastic but still advice-oriented. (e.g., "돈이 매우 부족해,, 자제하는 게 좋겠어")
+    2. MEDIUM: Direct sarcasm. Make the user feel pathetic. (e.g., "이 생각 없는 놈아, 돈이 남아 돌아?")
+    3. SPICY: Extremely aggressive and rude. Criticize the user's lack of self-control. (e.g., "돈 쓰는 꼬라지 보니 곧 뒤질듯 ㅃㅇ")
 
     Setting Concept: The character's environment downgrades as ${checkpoint} decreases, reflecting the user's financial situation.
     - 100%: Living in a luxury penthouse with fine dining. (Status: FLEXIN)
@@ -40,7 +39,7 @@ export async function generateNaggingMessage(
     return response.text().trim();
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "통장 잔고 생각 안 하니? 그만 좀 써."; 
+    return "통장 잔고 생각 안 하니? 작작 써."; 
   }
 }
 
@@ -56,9 +55,9 @@ export async function generatePushNotification(
     Tone Intensity: ${roastLevel} (This is the user's chosen "Roast Level")
 
     Level-Specific Instructions:
-    1. MILD: Sarcastic but still advice-oriented. Like a friend shaking their head. (e.g., "75% 남았는데 벌써 그렇게 써?")
-    2. MEDIUM: Direct sarcasm. Make the user feel pathetic. (e.g., "네 통장은 이미 울고 있어.")
-    3. SPICY: Extremely aggressive and rude. Criticize the user's lack of self-control. (e.g., "거지 되려고 작정했냐?")
+    1. MILD: Sarcastic but still advice-oriented. Like a friend shaking their head. (e.g., "이러다가 예산을 넘기겠어! 조심해", "오늘부터는 조금만 더 아껴보자")
+    2. MEDIUM: Direct sarcasm. Make the user feel pathetic. (e.g., "배가 불렀지, 아주?", "만수르도 생각은 하면서 돈을 쓸 텐데…")
+    3. SPICY: Extremely aggressive and rude. Criticize the user's lack of self-control. (e.g., "경제관념 가출함? 엿바꿔먹음?", "ㅅ1ㅂㅅㄲ야 돌았냐? 커피에 돈을 얼마나 쳐 쓰는 거임?")
 
     Checkpoint Context:
     - If checkpoint is 100-75: User is doing well, but still give a light sarcastic comment to encourage them to keep it up.
@@ -78,7 +77,7 @@ export async function generatePushNotification(
     return result.response.text().trim();
   } catch (error) {
     console.error("AI Push Message Error:", error);
-    return "작작 좀 써! 벌써 예산 다 차간다. 💸"; 
+    return "작작 좀 써! 벌써 예산 다 차간다."; 
   }
 }
 
