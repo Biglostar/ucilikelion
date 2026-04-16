@@ -9,6 +9,7 @@ import transactionRoutes from "./routes/transactionRoutes";
 import { generateNaggingMessage } from "./services/aiService";
 import dashboardRoutes from "./routes/dashboardRoutes";
 import plaidRoutes from './routes/plaidRoutes';
+import userRoutes from "./routes/userRoutes";
 
 
 const app = express();
@@ -22,7 +23,7 @@ app.use(express.json()); // Allow us to read JSON in requests
 // --- Register Routes ---
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/goals', goalRoutes);
-
+app.use("/api/users", userRoutes);
 app.use("/api/transactions", transactionRoutes);
 
 app.use('/api/plaid', plaidRoutes);
