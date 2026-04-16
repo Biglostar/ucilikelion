@@ -1,8 +1,10 @@
 import { RoastLevel } from "@prisma/client";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { PrismaClient } from "@prisma/client";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const prisma = new PrismaClient();
 
 export async function generateNaggingMessage( // 월 소비
   category: string,
@@ -126,5 +128,59 @@ export async function generateAiBudgetAnalysis(
   } catch (error) {
     console.error("AI Analysis Error:", error);
     return { suggestedBudget: Math.floor(averageCents) };
+  }
+}
+
+
+export async function generateMonthlyReport(userId: string) {
+
+  // 유저 정보 & 지출, 수입 데이터 가져오기
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      monthlySummaries: {
+        orderBy: [
+          { year: 'desc' },
+          { month: 'desc' }
+        ],
+        take: 1
+      }
+    }
+  });
+
+  if (!user || user.monthlySummaries.length === 0) {
+    return "분석할 데이터가 없어";
+  }
+
+  const summary = user.monthlySummaries[0];
+  const income = summary.totalIncomeCents / 100;
+  const expense = summary.totalSpentCents / 100;
+  
+  const expenseRatio = income > 0 
+    ? ((expense / income) * 100).toFixed(0) 
+    : (expense > 0 ? "100 이상" : "0");
+
+  const prompt = `
+    당신은 사용자의 소비 습관을 비웃는 냉소적인 자산관리사입니다.
+    사용자의 Roast Level은 '${user.roastLevel}'입니다. 이 강도에 맞춰서 아주 직설적인 반말로 말하세요.
+
+    [이번 달 데이터]
+    - 수입: $${income}
+    - 지출: $${expense}
+    - 수입 대비 지출 비율: ${expenseRatio}%
+
+    [작성 조건]
+    1. 반드시 수입($${income})과 지출($${expense}) 금액을 직접 언급할 것.
+    2. 수입의 ${expenseRatio}%를 써버렸다는 사실을 콕 집어서 한심해할 것.
+    3. 3~4문장 내외로 짧고 굵게 뼈를 때리는 잔소리를 할 것.
+    4. 저축 좀 하라는 압박으로 마무리할 것.
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error) {
+    console.error("Gemini 리포트 생성 실패:", error);
+    return `너 이번 달에 $${expense}나 썼더라? 수입의 ${expenseRatio}%나 날려 먹고 잠이 오니? 당장 내일부터 아껴 써.`;
   }
 }

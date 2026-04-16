@@ -51,66 +51,33 @@ export async function getGoals(req: Request, res: Response) {
     return res.status(500).json({ error: "Failed to fetch goals" });
   }
 }
-// ai 합치기 전 버전
-// export async function createGoalManually(req: Request, res: Response) {
-//   try {
-//     const userId = req.header("x-user-id");
-//     if (!userId) {
-//       return res.status(400).json({ error: "Missing x-user-id header" });
-//     }
-//     const {
-//       title,
-//       memo,
-//       icon,
-//       category,
-//       monthlyBudgetCents,
-//       startDate,
-//       endDate,
-//     } = req.body;
 
-//     const goal = await prisma.goal.create({
-//       data: {
-//         userId,
-//         title,
-//         memo,
-//         icon,
-//         category,
-//         monthlyBudgetCents: Number(monthlyBudgetCents),
-//         startDate: new Date(startDate),
-//         endDate: new Date(endDate),
-//       },
-//     });
-
-//     return res.status(201).json(goal);
-//   } catch (e) {
-//     console.error(e);
-//     return res.status(500).json({ error: "Failed to create goal" });
-//   }
-// }
-// ai 합친 버전
 export async function createGoal(req: Request, res: Response) {
   try {
     const userId = req.header("x-user-id") as string;
-    let { title, category, monthlyBudgetCents, icon, memo, budgetSource } = req.body;
+    let { title, category, monthlyBudgetCents, icon, memo, budgetSource, status } = req.body;
 
     if (budgetSource === "AUTO_AVG_3M") {
-      const last3Months = [];
       const now = new Date();
+      const last3Months = [];
       for (let i = 1; i <= 3; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         last3Months.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
       }
 
       const historySummaries = await prisma.monthlySummary.findMany({
-        where: { userId, OR: last3Months }
+        where: {
+          userId,
+          OR: last3Months
+        }
       });
 
-      const aiResult = await generateAiBudgetAnalysis(
-        category,
-        historySummaries.map(s => ({ month: `${s.month}월`, totalCents: s.totalSpentCents }))
-      );
-      
-      monthlyBudgetCents = aiResult.suggestedBudget;
+      if (historySummaries.length > 0) {
+        const totalSum = historySummaries.reduce((sum, s) => sum + s.totalSpentCents, 0);
+        monthlyBudgetCents = Math.floor(totalSum / historySummaries.length);
+      } else {
+        monthlyBudgetCents = 200000; //default
+      }
     }
 
     const now = new Date();
@@ -123,12 +90,13 @@ export async function createGoal(req: Request, res: Response) {
         title,
         category,
         monthlyBudgetCents: Number(monthlyBudgetCents),
+        baselineAvg3mCents: budgetSource === "AUTO_AVG_3M" ? Number(monthlyBudgetCents) : null,
         icon: icon || "💰",
         memo: memo || "",
         budgetSource: budgetSource || "USER_SET",
+        status: status || "ACTIVE", 
         startDate: startOfMonth,
         endDate: endOfMonth,
-        status: "ACTIVE"
       }
     });
 
@@ -139,56 +107,3 @@ export async function createGoal(req: Request, res: Response) {
   }
 }
 
-// // --- REUSABLE HELPER FUNCTION ---
-// // This handles the math and database updates, without needing req/res!
-// export const updateUserBudgets = async (userId: string) => {
-//   const activeGoals = await prisma.goal.findMany({
-//     where: { userId: userId, status: 'ACTIVE' }
-//   });
-
-//   let updatedCount = 0;
-
-//   for (const goal of activeGoals) {
-//     const spending = await prisma.transaction.aggregate({
-//       _sum: { amountCents: true },
-//       where: {
-//         userId: userId,
-//         category: goal.category, 
-//         type: TransactionType.EXPENSE,
-//         occurredAt: { gte: goal.startDate, lte: goal.endDate }
-//       }
-//     });
-
-//     const totalSpent = spending._sum.amountCents || 0;
-
-//     await prisma.goal.update({
-//       where: { id: goal.id },
-//       data: { currentSpentCents: totalSpent }
-//     });
-
-//     updatedCount++;
-//   }
-  
-//   return updatedCount; // Just return the number of updated goals
-// };
-
-// export async function calculateBudgetProgress(req: Request, res: Response) {
-//   try {
-//     const userId = req.header("x-user-id");
-//     if (!userId) {
-//       return res.status(400).json({ error: "Missing x-user-id header" });
-//     }
-
-//     // Call the helper function!
-//     const updatedCount = await updateUserBudgets(userId);
-
-//     return res.json({ 
-//       success: true, 
-//       message: `Updated progress for ${updatedCount} goals.` 
-//     });
-
-//   } catch (error) {
-//     console.error("Budget Calculation Error:", error);
-//     return res.status(500).json({ error: "Failed to calculate budget progress" });
-//   }
-// }
