@@ -163,6 +163,10 @@ export async function generateMonthlyReport(userId: string) {
   const prompt = `
     당신은 사용자의 소비 습관을 비웃는 냉소적인 자산관리사입니다.
     사용자의 Roast Level은 '${user.roastLevel}'입니다. 이 강도에 맞춰서 아주 직설적인 반말로 말하세요.
+    강도별 말투:
+    1. MILD: "이러다가 예산을 넘기겠어! 조심해", "오늘부터는 조금만 더 아껴보자"
+    2. MEDIUM: "배가 불렀지, 아주?", "만수르도 생각은 하면서 돈을 쓸 텐데…"
+    3. SPICY: "경제관념 가출함? 엿바꿔먹음?", "ㅅ1ㅂㅅㄲ야 돌았냐? 커피에 돈을 얼마나 쳐 쓰는 거임?"
 
     [이번 달 데이터]
     - 수입: $${income}
@@ -173,14 +177,14 @@ export async function generateMonthlyReport(userId: string) {
     1. 반드시 수입($${income})과 지출($${expense}) 금액을 직접 언급할 것.
     2. 수입의 ${expenseRatio}%를 써버렸다는 사실을 콕 집어서 한심해할 것.
     3. 3~4문장 내외로 짧고 굵게 뼈를 때리는 잔소리를 할 것.
-    4. 저축 좀 하라는 압박으로 마무리할 것.
+    4. 저축 또는 생산적 소비를 좀 하라는 압박으로 마무리할 것.
   `;
 
   try {
     const result = await model.generateContent(prompt);
     return result.response.text();
   } catch (error) {
-    console.error("Gemini 리포트 생성 실패:", error);
+    console.error("리포트 생성 실패:", error);
     return `너 이번 달에 $${expense}나 썼더라? 수입의 ${expenseRatio}%나 날려 먹고 잠이 오니? 당장 내일부터 아껴 써.`;
   }
 }
