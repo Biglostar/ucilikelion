@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getGoals, createGoal } from '../controllers/goalController';
+import { getGoals, createGoal, modifyGoal, deleteGoal } from '../controllers/goalController';
 
 const router = Router();
 
@@ -7,7 +7,12 @@ const router = Router();
 router.get('/', getGoals);
 
 // POST /api/goals (Create a new goal)
-
 router.post('/', createGoal);
+
+// PATCH /api/goals/:id (Using PATCH because we are partially updating it)
+router.patch('/:id', modifyGoal);
+
+// DELETE /api/goals/:id
+router.delete('/:id', deleteGoal);
 
 export default router;

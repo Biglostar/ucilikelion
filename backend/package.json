@@ -4,10 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --exec npx ts-node src/index.ts",
+    "dev": "nodemon --exec npx ts-node-dev src/index.ts",
     "seed": "npx ts-node prisma/seed.ts",
-    "build": "tsc",
-    "start": "node dist/index.js"
+    "build": "tsc && npx prisma generate",
+    "start": "npx prisma migrate deploy && node dist/index.js"
   },
   "prisma": {
     "seed": "npx ts-node prisma/seed.ts"
