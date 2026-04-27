@@ -2,13 +2,31 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma";
 import { generateNaggingMessage, generatePushNotification } from "../services/aiService";
 import { updateMonthlySummary } from "../services/summaryService";
+import { sendPushNotification } from "../services/pushService";
+/**
+ * 전체 잔여 예산 비율에 따라 캐릭터의 경제적 상태를 결정합니다.
+ * @param totalRemainingPct 전체 예산 대비 남은 금액 비율 (0 ~ 100)
+ * @returns "RICH" | "STABLE" | "SURVIVING" | "DESPERATE" | "BROKE"
+ */
+export function determineStatus(totalRemainingPct: number): "RICH" | "STABLE" | "SURVIVING" | "DESPERATE" | "BROKE" {
+  if (totalRemainingPct > 75) {
+    return "RICH";
+  } else if (totalRemainingPct > 50) {
+    return "STABLE";
+  } else if (totalRemainingPct > 25) {
+    return "SURVIVING";
+  } else if (totalRemainingPct > 0) {
+    return "DESPERATE";
+  } else {
+    return "BROKE";
+  }
+}
 
 function getNaggingCheckpoint(lastAlertPct: number, remainingPct: number) {
   const checkpoints = [100, 75, 50, 25, 10, 0];
-  // 사용자가 지출을 해서 remainingPct가 떨어질 때, 어떤 체크포인트를 돌파 했는지 체크
   const crossed = checkpoints
     .filter((cp) => remainingPct <= cp && lastAlertPct > cp)
-    .sort((a, b) => a - b)[0]; // 가장 먼저 만난거 선택
+    .sort((a, b) => a - b)[0];
   return crossed !== undefined ? crossed : null;
 }
 
@@ -20,11 +38,8 @@ export async function getTransactions(req: Request, res: Response) {
     }
 
     const { from, to } = req.query;
-
-    // 1. Start with the base filter (just the user ID)
     const whereClause: any = { userId };
 
-    // 2. Safely add dates ONLY if they exist in the URL
     if (from || to) {
       whereClause.occurredAt = {};
       
@@ -34,16 +49,13 @@ export async function getTransactions(req: Request, res: Response) {
       
       if (to) {
         const toDate = new Date(to as string);
-        // Push the cutoff to the very last millisecond of the day!
         toDate.setUTCHours(23, 59, 59, 999); 
         whereClause.occurredAt.lte = toDate;
       }
     }
 
-    // DEBUG: This will print in your terminal so we know exactly what is happening
-    console.log("Searching with filter:", JSON.stringify(whereClause, null, 2));
+    // console.log("Searching with filter:", JSON.stringify(whereClause, null, 2));
 
-    // 3. Pass the safely built object to Prisma
     const transactions = await prisma.transaction.findMany({
       where: whereClause,
       orderBy: {
@@ -58,113 +70,118 @@ export async function getTransactions(req: Request, res: Response) {
   }
 }
 
-
 export async function createTransaction(req: Request, res: Response) {
   try {
     const userId = req.header("x-user-id") as string;
     if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
 
-    const { title, amountCents, type, category, occurredAt, isFixed, note } = req.body;
-
-    if (!title || !category || !type || !occurredAt) return res.status(400).json({ error: "Missing required fields" });
-    const amount = Number(amountCents);
-    if (isNaN(amount) || amount <= 0) return res.status(400).json({ error: "amountCents must be > 0" });
+    const { title, amountCents, type, category, isFixed, note } = req.body;
+    const { occurredAt } = req.body;
 
     const dateObj = new Date(occurredAt);
     const year = dateObj.getFullYear();
     const month = dateObj.getMonth() + 1;
 
     const result = await prisma.$transaction(async (tx) => {
-      //transaction 생성
-      const transaction = await tx.transaction.create({
-        data: { userId, title, amountCents: amount, type, category, occurredAt: dateObj, isFixed: isFixed ?? false, note },
+    const user = await tx.user.findUnique({ 
+      where: { id: userId },
+      select: { id: true, fcmToken: true, roastLevel: true, characterStatus: true, characterMessage: true, lastTotalAlertPct: true, totalMonthlyBudgetCents: true }
+    });
+    if (!user) throw new Error("User not found");
+
+      // 2. 지출 생성
+    const transaction = await tx.transaction.create({
+        data: { userId, title, amountCents, type, category, occurredAt: dateObj, isFixed: isFixed ?? false, note },
+    });
+
+    if (type === "INCOME") return { transaction, alert: { shouldNotify: false } };
+
+      // 3. MonthlySummary 업데이트 (전체 지출 합산)
+    const summary = await tx.monthlySummary.upsert({
+        where: { userId_year_month: { userId, year, month } },
+        update: { totalSpentCents: { increment: amountCents } },
+        create: { userId, year, month, totalSpentCents: amountCents }
       });
 
-      // monthlySummary 업데이트 
-      if (type === "EXPENSE") {
-        await tx.monthlySummary.upsert({
-          where: {
-            userId_year_month: { userId, year, month }
-          },
-          update: {
-            totalSpentCents: { increment: amount }
-          },
-          create: {
-            userId,
-            year,
-            month,
-            totalSpentCents: amount
+      // --- 카테고리: 푸시 알림 체크 ---
+    const goal = await tx.goal.findFirst({
+    where: { userId, category, status: "ACTIVE" },
+    orderBy: { isSelected: "desc" }
+  });
+
+  let naggingMessage = "";
+  let shouldNotifyPush = false;
+
+if (goal) {
+  const newGoalSpent = goal.currentSpentCents + amountCents;
+  const goalRemainingPct = ((goal.monthlyBudgetCents - newGoalSpent) / goal.monthlyBudgetCents) * 100;
+  
+  // 1. 체크포인트 통과 여부 확인
+  const goalCheckpoint = getNaggingCheckpoint(goal.lastAlertPct, goalRemainingPct);
+
+  if (goalCheckpoint !== null || newGoalSpent > goal.monthlyBudgetCents) {
+    shouldNotifyPush = true;
+    // AI 서비스 호출하여 메시지 생성
+    naggingMessage = await generatePushNotification(category, goalCheckpoint ?? 0, user.roastLevel);
+  }
+
+  // 2. 알림 여부와 상관없이 지출액은 무조건 업데이트
+  await tx.goal.update({
+    where: { id: goal.id },
+    data: { 
+      currentSpentCents: newGoalSpent, 
+      // 알림이 발생했을 때만 체크포인트 기록, 아니면 기존 값 유지
+      lastAlertPct: goalCheckpoint !== null ? goalCheckpoint : goal.lastAlertPct
+    }
+  });
+}
+
+      // --- 전체 월: 캐릭터 상태 업데이트 ---
+    const totalBudget = user.totalMonthlyBudgetCents;
+    const totalSpent = summary.totalSpentCents;
+    const totalRemainingPct = ((totalBudget - totalSpent) / totalBudget) * 100;
+    console.log("Total Spent:", totalSpent, "Remaining %:", totalRemainingPct);
+const totalCheckpoint = getNaggingCheckpoint(user.lastTotalAlertPct!, totalRemainingPct);      
+    const newStatus = determineStatus(totalRemainingPct);
+  console.log("New Calculated Status:", newStatus);
+    if (newStatus !== user.characterStatus || totalCheckpoint !== null) {
+        const characterMsg = await generateNaggingMessage("monthly_progress", totalCheckpoint ?? Math.floor(totalRemainingPct), user.roastLevel);
+        
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            characterStatus: newStatus,
+            characterMessage: characterMsg,
+            lastTotalAlertPct: totalCheckpoint !== null ? totalCheckpoint : user.lastTotalAlertPct                                            
           }
         });
       }
 
-      if (type === "INCOME") {
-        return { transaction, goal: null, alert: { shouldNotify: false } };
-      }
 
-      // user & active goal 찾기
-      const user = await tx.user.findUnique({ where: { id: userId } });
-      const goal = await tx.goal.findFirst({
-        where: { userId, category, status: "ACTIVE" },
-        orderBy: [{ isSelected: "desc" }, { createdAt: "desc" }]
-      });
 
-      if (!goal || !user) return { transaction, alert: { shouldNotify: false } };
-
-      // 예산 계산
-      const newSpent = goal.currentSpentCents + transaction.amountCents;
-      const remainingPct = ((goal.monthlyBudgetCents - newSpent) / goal.monthlyBudgetCents) * 100;
-
-      //알림 트리거 확인 및 캐릭터 상태 결정
-      const currentCheckpoint = getNaggingCheckpoint(goal.lastAlertPct, remainingPct);
-      const isOverBudget = newSpent > goal.monthlyBudgetCents;
-      const shouldNotify = isOverBudget || currentCheckpoint !== null;
-
-      let characterStatus: "RICH" | "STABLE" | "SURVIVING" | "DESPERATE" | "BROKE" = "RICH";
-      if (remainingPct > 75) characterStatus = "RICH";
-      else if (remainingPct > 50) characterStatus = "STABLE";
-      else if (remainingPct > 25) characterStatus = "SURVIVING";
-      else if (remainingPct > 0) characterStatus = "DESPERATE";
-      else characterStatus = "BROKE";
-
-      // 메시지 생성
-      let naggingMessage = "";
-      if (shouldNotify) {
-        const displayPct = isOverBudget ? 0 : (currentCheckpoint ?? Math.floor(remainingPct));
-        naggingMessage = await generatePushNotification(
-          goal.category,
-          displayPct,
-          user.roastLevel
-        );
-      }
-
-      // goal 업데이트
-      const updatedGoal = await tx.goal.update({
-        where: { id: goal.id },
-        data: {
-          currentSpentCents: newSpent,
-          lastAlertPct: isOverBudget ? -1 : (currentCheckpoint !== null ? currentCheckpoint : goal.lastAlertPct)
-        }
-      });
-
-      return {
-        transaction,
-        goal: updatedGoal,
+      return { 
+        transaction, 
         alert: { 
-          shouldNotify, 
-          message: naggingMessage,
-          characterStatus
-        }
+          shouldNotify: shouldNotifyPush, 
+          message: naggingMessage, 
+          characterStatus: newStatus 
+        },
+        fcmToken: user.fcmToken // 알림 발송용
       };
-    }, {timeout: 20000});
+    }, { timeout: 20000 });
+
+    // 4. 푸시 발송
+    if (result.alert.shouldNotify && result.fcmToken) {
+      sendPushNotification(result.fcmToken, "지출!!", result.alert.message)
+        .catch(e => console.error("Push failed:", e));
+    }
 
     return res.status(201).json(result);
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: "Failed to create transaction" });
+    return res.status(500).json({ error: "Transaction creation failed" });
   }
 }
-
 
 export async function deleteTransaction(req: Request, res: Response) {
   try {

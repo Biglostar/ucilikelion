@@ -1,37 +1,43 @@
 import { RoastLevel } from "@prisma/client";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { PrismaClient } from "@prisma/client";
 
-console.log("CHECK API KEY:", process.env.GEMINI_API_KEY ? "Loaded" : "Not Loaded");
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const prisma = new PrismaClient();
 
-export async function generateNaggingMessage(
+export async function generateNaggingMessage( // 월 소비
   category: string,
   checkpoint: number,
   level: RoastLevel
 ): Promise<string> {
   
   const prompt = `
-    Role: You are a cold-hearted, cynical AI financial assistant.
-    Context: The user has remaining ${checkpoint}% of their budget for '${category}'.
-    Tone Intensity: ${level} (This is the user's chosen "Roast Level")
+    Role: 차갑고 냉소적인 AI 재무 비서. (반말 사용)
+    Context: 사용자의 '${category}' 예산이 ${checkpoint}% 남았음.
+    Roast Level: ${level} (1:약함, 2:보통, 3:매움)
 
-    Level-Specific Instructions:
-    1. MILD: Sarcastic but still advice-oriented. Like a friend shaking their head. (e.g., "75% 남았는데 벌써 그렇게 써?")
-    2. MEDIUM: Direct sarcasm. Make the user feel pathetic. (e.g., "네 통장은 이미 울고 있어.")
-    3. SPICY: Extremely aggressive and rude. Criticize the user's lack of self-control. (e.g., "거지 되려고 작정했냐?")
+    [핵심 미션]
+    사용자의 남은 예산(${checkpoint}%)에 따른 '거주 상태'를 독설에 섞어서 표현할 것. 
+    예산이 적을수록 주거 환경이 처참해짐을 강조해라.
 
-    Setting Concept: The character's environment downgrades as ${checkpoint} decreases, reflecting the user's financial situation.
-    - 100%: Living in a luxury penthouse with fine dining. (Status: FLEXIN)
-    - 75%: Moving to a decent apartment, eating out less. (Status: CHILLIN)
-    - 50%: Cramped studio, eating instant noodles. (Status: SURVIVING)
-    - 25%: Rooftop room with a leaking ceiling, no heating. (Status: DESPERATE)
-    - 0%: Sleeping on a cold cardboard box outside. (Status: BROKE)
+    [거주 상태 가이드라인]
+    - 100%: 펜트하우스 (여유만만)
+    - 75%: 일반 아파트 (슬슬 불안)
+    - 50%: 좁은 고시원 (라면 취식 중)
+    - 25%: 비 새는 옥탑방 (노숙 직전)
+    - 0%: 길바닥 박스 (파산)
 
-    Constraints:
-    - Language: Korean (close friend feel)
-    - Length: Under 20 characters.
-    - No emojis.
+    [레벨별 말투]
+    1. MILD: 비꼬지만 충고 위주. (예: "슬슬 짐 싸야할것 같아..조심해")
+    2. MEDIUM: 한심하다는 듯 공격적. (예: "옥탑방 월세는 있냐?")
+    3. SPICY: 매우 공격적이고 무례함. (예: "박스 주워라, 곧 노숙이다 새꺄")
+
+    [제약 사항]
+    - 반드시 한국어로 응답하되, 친구에게 말하듯 반말로 작성.
+    - 공백 포함 20자 이내로 짧고 강렬하게.
+    - 이모지 사용 금지.
+    - 오직 대사(String)만 출력할 것.
   `;
 
   try {
@@ -40,14 +46,14 @@ export async function generateNaggingMessage(
     return response.text().trim();
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "통장 잔고 생각 안 하니? 그만 좀 써."; 
+    return "통장 잔고 생각 안 하니? 작작 써."; 
   }
 }
 
 // 앱 푸쉬용 알림 문구 생성
 export async function generatePushNotification(
   category: string,
-  spentPct: number, // 퍼센트
+  spentPct: number, 
   roastLevel: "MILD" | "MEDIUM" | "SPICY"
 ) {
   const prompt = `
@@ -56,9 +62,9 @@ export async function generatePushNotification(
     Tone Intensity: ${roastLevel} (This is the user's chosen "Roast Level")
 
     Level-Specific Instructions:
-    1. MILD: Sarcastic but still advice-oriented. Like a friend shaking their head. (e.g., "75% 남았는데 벌써 그렇게 써?")
-    2. MEDIUM: Direct sarcasm. Make the user feel pathetic. (e.g., "네 통장은 이미 울고 있어.")
-    3. SPICY: Extremely aggressive and rude. Criticize the user's lack of self-control. (e.g., "거지 되려고 작정했냐?")
+    1. MILD: Sarcastic but still advice-oriented. Like a friend shaking their head. (e.g., "이러다가 예산을 넘기겠어! 조심해", "오늘부터는 조금만 더 아껴보자")
+    2. MEDIUM: Direct sarcasm. Make the user feel pathetic. (e.g., "배가 불렀지, 아주?", "만수르도 생각은 하면서 돈을 쓸 텐데…")
+    3. SPICY: Extremely aggressive and rude. Criticize the user's lack of self-control. (e.g., "경제관념 가출함? 엿바꿔먹음?", "ㅅ1ㅂㅅㄲ야 돌았냐? 커피에 돈을 얼마나 쳐 쓰는 거임?")
 
     Checkpoint Context:
     - If checkpoint is 100-75: User is doing well, but still give a light sarcastic comment to encourage them to keep it up.
@@ -78,7 +84,7 @@ export async function generatePushNotification(
     return result.response.text().trim();
   } catch (error) {
     console.error("AI Push Message Error:", error);
-    return "작작 좀 써! 벌써 예산 다 차간다. 💸"; 
+    return "작작 좀 써! 벌써 예산 다 차간다."; 
   }
 }
 
@@ -122,5 +128,63 @@ export async function generateAiBudgetAnalysis(
   } catch (error) {
     console.error("AI Analysis Error:", error);
     return { suggestedBudget: Math.floor(averageCents) };
+  }
+}
+
+
+export async function generateMonthlyReport(userId: string) {
+
+  // 유저 정보 & 지출, 수입 데이터 가져오기
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      monthlySummaries: {
+        orderBy: [
+          { year: 'desc' },
+          { month: 'desc' }
+        ],
+        take: 1
+      }
+    }
+  });
+
+  if (!user || user.monthlySummaries.length === 0) {
+    return "분석할 데이터가 없어";
+  }
+
+  const summary = user.monthlySummaries[0];
+  const income = summary.totalIncomeCents / 100;
+  const expense = summary.totalSpentCents / 100;
+  
+  const expenseRatio = income > 0 
+    ? ((expense / income) * 100).toFixed(0) 
+    : (expense > 0 ? "100 이상" : "0");
+
+  const prompt = `
+    당신은 사용자의 소비 습관을 비웃는 냉소적인 자산관리사입니다.
+    사용자의 Roast Level은 '${user.roastLevel}'입니다. 이 강도에 맞춰서 아주 직설적인 반말로 말하세요.
+    강도별 말투:
+    1. MILD: "이러다가 예산을 넘기겠어! 조심해", "오늘부터는 조금만 더 아껴보자"
+    2. MEDIUM: "배가 불렀지, 아주?", "만수르도 생각은 하면서 돈을 쓸 텐데…"
+    3. SPICY: "경제관념 가출함? 엿바꿔먹음?", "ㅅ1ㅂㅅㄲ야 돌았냐? 커피에 돈을 얼마나 쳐 쓰는 거임?"
+
+    [이번 달 데이터]
+    - 수입: $${income}
+    - 지출: $${expense}
+    - 수입 대비 지출 비율: ${expenseRatio}%
+
+    [작성 조건]
+    1. 반드시 수입($${income})과 지출($${expense}) 금액을 직접 언급할 것.
+    2. 수입의 ${expenseRatio}%를 써버렸다는 사실을 콕 집어서 한심해할 것.
+    3. 3~4문장 내외로 짧고 굵게 뼈를 때리는 잔소리를 할 것.
+    4. 저축 또는 생산적 소비를 좀 하라는 압박으로 마무리할 것.
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error) {
+    console.error("리포트 생성 실패:", error);
+    return `너 이번 달에 $${expense}나 썼더라? 수입의 ${expenseRatio}%나 날려 먹고 잠이 오니? 당장 내일부터 아껴 써.`;
   }
 }
