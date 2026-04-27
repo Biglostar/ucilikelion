@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from "../prisma";
+import { generateAiBudgetAnalysis } from '../services/aiService';
 // import { generateAiBudgetAnalysis } from '../services/aiService';
 // import { TransactionType } from '@prisma/client';
 
@@ -50,64 +51,52 @@ export async function getGoals(req: Request, res: Response) {
     return res.status(500).json({ error: "Failed to fetch goals" });
   }
 }
-// ai 합치기 전 버전
-// export async function createGoalManually(req: Request, res: Response) {
-//   try {
-//     const userId = req.header("x-user-id");
-//     if (!userId) {
-//       return res.status(400).json({ error: "Missing x-user-id header" });
-//     }
-//     const {
-//       title,
-//       memo,
-//       icon,
-//       category,
-//       monthlyBudgetCents,
-//       startDate,
-//       endDate,
-//     } = req.body;
 
-//     const goal = await prisma.goal.create({
-//       data: {
-//         userId,
-//         title,
-//         memo,
-//         icon,
-//         category,
-//         monthlyBudgetCents: Number(monthlyBudgetCents),
-//         startDate: new Date(startDate),
-//         endDate: new Date(endDate),
-//       },
-//     });
-
-//     return res.status(201).json(goal);
-//   } catch (e) {
-//     console.error(e);
-//     return res.status(500).json({ error: "Failed to create goal" });
-//   }
-// }
-// ai 합친 버전
 export async function createGoal(req: Request, res: Response) {
   try {
-    const userId = req.header("x-user-id");
-    const { title, category, monthlyBudgetCents, icon, memo, budgetSource } = req.body;
+    const userId = req.header("x-user-id") as string;
+    let { title, category, monthlyBudgetCents, icon, memo, budgetSource, status } = req.body;
 
-    // 이번 달 1일과 말일을 자동으로 계산
+    if (budgetSource === "AUTO_AVG_3M") {
+      const now = new Date();
+      const last3Months = [];
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        last3Months.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+      }
+
+      const historySummaries = await prisma.monthlySummary.findMany({
+        where: {
+          userId,
+          OR: last3Months
+        }
+      });
+
+      if (historySummaries.length > 0) {
+        const totalSum = historySummaries.reduce((sum, s) => sum + s.totalSpentCents, 0);
+        monthlyBudgetCents = Math.floor(totalSum / historySummaries.length);
+      } else {
+        monthlyBudgetCents = 200000; //default
+      }
+    }
+
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0); // 이번달 기준
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
     const goal = await prisma.goal.create({
       data: {
-        userId: userId as string,
+        userId,
         title,
         category,
         monthlyBudgetCents: Number(monthlyBudgetCents),
+        baselineAvg3mCents: budgetSource === "AUTO_AVG_3M" ? Number(monthlyBudgetCents) : null,
         icon: icon || "💰",
         memo: memo || "",
         budgetSource: budgetSource || "USER_SET",
+        status: status || "ACTIVE", 
         startDate: startOfMonth,
         endDate: endOfMonth,
-        status: "ACTIVE"
       }
     });
 
