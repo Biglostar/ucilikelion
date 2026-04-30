@@ -29,7 +29,7 @@ struct SpeechBubbleView: View {
             }
         }
         .padding(.horizontal, Theme.cardPadding)
-        .padding(.vertical, Theme.spacingSmall + 4)
+        .padding(.vertical, Theme.spacingCompact)
         .frame(maxWidth: .infinity, alignment: .center)
         .background(
             RoundedRectangle(cornerRadius: corner, style: .continuous)

@@ -26,7 +26,7 @@ struct SpendProgressCard: View {
         let fillColor = isFull ? Theme.minus : Theme.progressFill
         let bgColor   = isFull ? Theme.overBG : Theme.progressBG
 
-        VStack(spacing: 10) {
+        VStack(spacing: Theme.spacingCompact) {
 
             // MARK: - Progress Bar
             GeometryReader { geo in

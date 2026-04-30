@@ -22,9 +22,9 @@ struct MonthCalendarView: View {
 
     // MARK: Body
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Theme.spacingCompact) {
 
-            VStack(spacing: 10) {
+            VStack(spacing: Theme.spacingCompact) {
                 header
 
                 HStack {
@@ -40,7 +40,7 @@ struct MonthCalendarView: View {
                 // MARK: - Grid (현재 달 + 이전/다음 달 날짜)
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.flexible()), count: 7),
-                    spacing: 10
+                    spacing: Theme.spacingCompact
                 ) {
                     ForEach(Array(grid.enumerated()), id: \.offset) { _, date in
                         DayCellView(
@@ -69,7 +69,7 @@ struct MonthCalendarView: View {
 
     // MARK: - Header
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.spacingCompact) {
 
             Button { stepMonth(-1) } label: {
                 Image(systemName: "chevron.left")
@@ -94,10 +94,7 @@ struct MonthCalendarView: View {
     }
     // MARK: - Title helper
     private func monthTitle(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US")
-        f.dateFormat = "MMMM yyyy"
-        return f.string(from: date)
+        return AppFormatters.enMonthYear.string(from: date)
     }
 
     // MARK: - Month step

@@ -16,6 +16,7 @@ private struct GoalSheetItem: Identifiable {
 
 struct GoalsListView: View {
     @ObservedObject var goalsStore: GoalsStore
+    @EnvironmentObject var tutorialStore: TutorialStore
 
     // MARK: - State
 
@@ -23,54 +24,79 @@ struct GoalsListView: View {
     @State private var goalToEdit: GoalSheetItem? = nil
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: Theme.spacingStandard) {
-                    if !goalsStore.goals.isEmpty {
-                        VStack(spacing: Theme.spacingRegular) {
-                            ForEach(Array(goalsStore.goals.enumerated()), id: \.element.id) { index, goal in
-                                goalRow(
-                                    goal: goalsStore.binding(for: goal.id) ?? .constant(goal),
-                                    onTapToEdit: { goalToEdit = GoalSheetItem(goal: goal) }
-                                )
+        ZStack {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: Theme.spacingStandard) {
+                        if !goalsStore.goals.isEmpty {
+                            VStack(spacing: Theme.spacingRegular) {
+                                ForEach(Array(goalsStore.goals.enumerated()), id: \.element.id) { index, goal in
+                                    goalRow(
+                                        goal: goalsStore.binding(for: goal.id) ?? .constant(goal),
+                                        onTapToEdit: { goalToEdit = GoalSheetItem(goal: goal) }
+                                    )
+                                    // 튜토리얼 goalToggle 프레임: 첫 번째 목표 행에 등록
+                                    .background(index == 0 ? GeometryReader { bg in
+                                        Color.clear.onAppear {
+                                            tutorialStore.registerFrame(bg.frame(in: .global), for: .goalToggle)
+                                        }
+                                    } : nil)
+                                }
                             }
+                            .llContainer()
+                            // 튜토리얼 goalsList 프레임 등록
+                            .background(GeometryReader { bg in
+                                Color.clear.onAppear {
+                                    tutorialStore.registerFrame(bg.frame(in: .global), for: .goalsList)
+                                }
+                            })
                         }
-                        .llContainer()
-                    }
 
-                    Button {
-                        showAdd = true
-                    } label: {
-                        Text("새로운 목표 추가하기")
-                            .font(.custom(Theme.fontLaundry, size: 16))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, Theme.buttonVerticalPadding)
-                            .background(Theme.progressFill)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+                        Button {
+                            showAdd = true
+                        } label: {
+                            Text("새로운 목표 추가하기")
+                                .font(.custom(Theme.fontLaundry, size: 16))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, Theme.buttonVerticalPadding)
+                                .background(Theme.progressFill)
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
+                        }
+                        // 튜토리얼 addGoal 프레임 등록
+                        .background(GeometryReader { bg in
+                            Color.clear.onAppear {
+                                tutorialStore.registerFrame(bg.frame(in: .global), for: .addGoal)
+                            }
+                        })
+                    }
+                    .padding(.horizontal, Theme.screenHorizontal)
+                    .padding(.top, Theme.screenTop + Theme.screenTopNavExtra)
+                    .padding(.bottom, Theme.screenBottom)
+                }
+                .background(Color.white)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Text("나의 목표")
+                            .font(.custom(Theme.fontLaundry, size: Theme.titleSize))
+                            .foregroundStyle(Theme.rose)
                     }
                 }
-                .padding(.horizontal, Theme.screenHorizontal)
-                .padding(.top, Theme.screenTop + Theme.screenTopNavExtra)
-                .padding(.bottom, Theme.screenBottom)
-            }
-            .background(Color.white)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("나의 목표")
-                        .font(.custom(Theme.fontLaundry, size: Theme.titleSize))
-                        .foregroundStyle(Theme.rose)
+                .sheet(isPresented: $showAdd) {
+                    AddGoalView(goalsStore: goalsStore)
+                        .presentationDetents([.large])
+                        .presentationCornerRadius(Theme.sheetCornerRadius)
+                }
+                .sheet(item: $goalToEdit) { item in
+                    AddGoalView(goalsStore: goalsStore, editingGoal: item.goal)
+                        .presentationDetents([.large])
+                        .presentationCornerRadius(Theme.sheetCornerRadius)
                 }
             }
-            .sheet(isPresented: $showAdd) {
-                AddGoalView(goalsStore: goalsStore)
-                    .presentationDetents([.large])
-                    .presentationCornerRadius(Theme.sheetCornerRadius)
-            }
-            .sheet(item: $goalToEdit) { item in
-                AddGoalView(goalsStore: goalsStore, editingGoal: item.goal)
-                    .presentationDetents([.large])
-                    .presentationCornerRadius(Theme.sheetCornerRadius)
+
+            // 튜토리얼 오버레이 (목표 탭 단계에서만 표시)
+            if tutorialStore.isActive && tutorialStore.currentStep.requiredTab == 1 {
+                TutorialOverlayView(store: tutorialStore)
             }
         }
     }

@@ -70,7 +70,7 @@ extension View {
 
     func softDividerBox(corner: CGFloat = Theme.cardCorner) -> some View {
         self
-            .padding(.vertical, Theme.spacingSmall + 4)
+            .padding(.vertical, Theme.spacingCompact)
             .padding(.horizontal, Theme.spacingRegular)
             .overlay(
                 RoundedRectangle(cornerRadius: corner, style: .continuous)

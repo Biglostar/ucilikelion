@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
+    @EnvironmentObject private var tutorialStore: TutorialStore
 
     @State private var showLoginSheet = false
     @State private var showTermsSheet = false
@@ -38,10 +39,15 @@ struct ContentView: View {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     showSplash = false
                 }
-                // 최초 1회만: 약관 → 로그인 → (미연결 시) Plaid
+                // 최초 1회만: 약관 → 로그인 → (미연결 시) Plaid → 튜토리얼
                 if !settingsStore.settings.hasAcceptedTerms {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         showTermsSheet = true
+                    }
+                } else {
+                    // 재방문: 튜토리얼 미완료 시에만 시작
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        tutorialStore.startIfNeeded()
                     }
                 }
             }
@@ -93,6 +99,10 @@ struct ContentView: View {
             }
             .onDisappear {
                 showPlaidSheet = false
+                // Plaid 온보딩 완료 → 튜토리얼 시작
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    tutorialStore.start()
+                }
             }
         }
     }

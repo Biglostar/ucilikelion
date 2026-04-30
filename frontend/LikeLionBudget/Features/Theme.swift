@@ -22,16 +22,23 @@ enum Theme {
 
     // MARK: - 홈 화면
     enum Home {
+        /// 헤더(캐릭터+말풍선) 영역이 화면 높이에서 차지하는 비율
         static let headerRatio: CGFloat = 0.56
+        /// 헤더 하단 이번달 지출 영역 높이
         static var spendAreaHeight: CGFloat { h(160) }
         static var gapHeaderToGoalBlock: CGFloat { 16 * scale }
         static var gapInsideGoalPage: CGFloat { 12 * scale }
         static var gapGoalToCalendar: CGFloat { 20 * scale }
         static var goalCalendarHorizontal: CGFloat { 20 * scale }
         static var calendarVerticalPadding: CGFloat { 4 * scale }
+        /// 말풍선 너비가 화면 폭에서 차지하는 비율
         static let bubbleWidthRatio: CGFloat = 0.34
         /// 레벨 0 캐릭터 스케일
         static let characterLevel0Scale: CGFloat = 0.92
+        /// 목표 게이지 바 높이
+        static var goalBarHeight: CGFloat { 32 * scale }
+        /// 이번달 지출 금액 폰트 사이즈
+        static var spendAmountSize: CGFloat { 44 * scale }
     }
 
     // MARK: - 개인정보 관리 화면
@@ -102,6 +109,7 @@ enum Theme {
     // MARK: - 공통 간격
     static var spacingTight: CGFloat { 4 * scale }
     static var spacingSmall: CGFloat { 6 * scale }
+    static var spacingCompact: CGFloat { 10 * scale }   // spacingSmall(6) + spacingTight(4) 대체
     static var spacingMedium: CGFloat { 8 * scale }
     static var spacingRegular: CGFloat { 12 * scale }
     static var spacingStandard: CGFloat { 14 * scale }

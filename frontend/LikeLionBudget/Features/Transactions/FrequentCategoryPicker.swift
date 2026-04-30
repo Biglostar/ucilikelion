@@ -137,7 +137,7 @@ struct CategoryPickerSheet: View {
                         onPick(c)
                         dismiss()
                     } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: Theme.spacingCompact) {
                             Text(c.emoji)
 
                             Text(c.displayNameKR)

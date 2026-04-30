@@ -104,7 +104,7 @@ struct SettingsView: View {
             .foregroundStyle(toneColor(for: settings.settings.naggingLevel))
             .multilineTextAlignment(.center)
             .minimumScaleFactor(0.75)
-            .padding(.vertical, Theme.spacingSmall + 4)
+            .padding(.vertical, Theme.spacingCompact)
             .padding(.horizontal, Theme.spacingRegular)
             .frame(maxWidth: .infinity)
             .background(Theme.progressBG.opacity(0.6))

@@ -14,7 +14,7 @@ struct GoalsPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Theme.spacingCompact) {
             Capsule()
                 .fill(Color.secondary.opacity(0.35))
                 .frame(width: 44, height: 5)

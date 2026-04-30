@@ -11,6 +11,7 @@ struct HomeView: View {
 
     @ObservedObject var store: TransactionStore
     @ObservedObject var goalsStore: GoalsStore
+    @EnvironmentObject var tutorialStore: TutorialStore
     var aiSpeechMent: String? = nil
     var characterSpendingLevel: Int? = nil
 
@@ -38,6 +39,11 @@ struct HomeView: View {
             ScrollView {
                 homeScrollContent
             }
+
+            // 튜토리얼 오버레이 (홈 탭 단계에서만 표시)
+            if tutorialStore.isActive && tutorialStore.currentStep.requiredTab == 0 {
+                TutorialOverlayView(store: tutorialStore)
+            }
         }
         .onAppear {
             if selectedGoalID == nil {
@@ -51,6 +57,20 @@ struct HomeView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.white)
                 .presentationCornerRadius(Theme.sheetCornerRadius)
+        }
+        // 튜토리얼: dayDetail 단계 → DayDetailSheet 자동 오픈
+        .onChange(of: tutorialStore.shouldOpenDayDetail) { _, should in
+            guard should else { return }
+            tutorialStore.shouldOpenDayDetail = false
+            // 거래 내역이 있는 날짜 또는 오늘로 시트 열기
+            let date = store.transactions.first?.date ?? Date()
+            selectedDayForSheet = SelectedDay(date: date)
+        }
+        // 튜토리얼: goalsList 단계 전 → DayDetailSheet 닫기
+        .onChange(of: tutorialStore.shouldDismissHomeSheet) { _, should in
+            guard should else { return }
+            tutorialStore.shouldDismissHomeSheet = false
+            selectedDayForSheet = nil
         }
     }
 
@@ -83,9 +103,21 @@ struct HomeView: View {
                         )
                     }
                 }
+                // 튜토리얼 goalProgress 프레임 등록
+                .background(GeometryReader { bg in
+                    Color.clear.onAppear {
+                        tutorialStore.registerFrame(bg.frame(in: .global), for: .goalProgress)
+                    }
+                })
 
                 MonthCalendarView(month: $month, store: store, selectedDay: $selectedDayForSheet)
                     .padding(.vertical, Theme.Home.calendarVerticalPadding)
+                    // 튜토리얼 calendar 프레임 등록
+                    .background(GeometryReader { bg in
+                        Color.clear.onAppear {
+                            tutorialStore.registerFrame(bg.frame(in: .global), for: .calendar)
+                        }
+                    })
             }
             .padding(.horizontal, Theme.Home.goalCalendarHorizontal)
             .padding(.top, Theme.Home.gapHeaderToGoalBlock)
@@ -125,6 +157,12 @@ struct HomeView: View {
                         SpeechBubbleView(text: speechTextMonthOnly)
                             .frame(width: w * Theme.Home.bubbleWidthRatio)
                             .fixedSize(horizontal: false, vertical: true)
+                            // 튜토리얼 speechBubble 프레임 등록
+                            .background(GeometryReader { bg in
+                                Color.clear.onAppear {
+                                    tutorialStore.registerFrame(bg.frame(in: .global), for: .speechBubble)
+                                }
+                            })
                             .position(x: w * CGFloat(layout.bubbleX), y: imageH * CGFloat(layout.bubbleY))
 
                         BubbleTailDots()
@@ -133,10 +171,22 @@ struct HomeView: View {
                 }
                 .frame(height: imageH)
                 .clipped()
+                // 튜토리얼 character 프레임 등록
+                .background(GeometryReader { bg in
+                    Color.clear.onAppear {
+                        tutorialStore.registerFrame(bg.frame(in: .global), for: .character)
+                    }
+                })
 
                 SpendMonthOnlyView(monthAmount: totalSpendTextThisMonth())
                     .frame(height: Theme.Home.spendAreaHeight)
                     .background(Theme.beige)
+                    // 튜토리얼 spendAmount 프레임 등록
+                    .background(GeometryReader { bg in
+                        Color.clear.onAppear {
+                            tutorialStore.registerFrame(bg.frame(in: .global), for: .spendAmount)
+                        }
+                    })
             }
             .coordinateSpace(name: "homeHeaderGlobal")
             .frame(height: headerH)
@@ -216,17 +266,17 @@ private struct SpendMonthOnlyView: View {
     var body: some View {
         VStack(spacing: 2) {
             Text("이번 달에")
-                .font(.custom(Theme.fontLaundry, size: 16))
+                .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                 .foregroundStyle(Theme.text)
 
             Text(monthAmount)
-                .font(.custom(Theme.fontLaundry, size: 44))
+                .font(.custom(Theme.fontLaundry, size: Theme.Home.spendAmountSize))
                 .foregroundStyle(Theme.rose)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
 
             Text("지출했어요")
-                .font(.custom(Theme.fontLaundry, size: 18))
+                .font(.custom(Theme.fontLaundry, size: Theme.subtitleSize))
                 .foregroundStyle(Theme.text)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -368,25 +418,12 @@ private struct GoalRemainingLabel: View {
 
     /// 예산 (cents). Dashboard activeGoals 없을 때만 사용. 있으면 API(DashboardActiveGoal.budget) 사용.
     private func budgetCents(for category: BudgetCategory) -> Int {
-        switch category {
-        case .rent: return 1800 * 100
-        case .utilities: return 200 * 100
-        case .grocery: return 400 * 100
-        case .cafe: return 60 * 100
-        case .food: return 250 * 100
-        default: return 200 * 100
-        }
+        localBudgetCents(for: category)
     }
 
     /// 이번 달 해당 카테고리 지출 (cents). Dashboard 없을 때만 사용. 있으면 API(DashboardActiveGoal.spent) 사용.
     private func spentCentsThisMonth(for category: BudgetCategory) -> Int {
-        let cal = MockData.usCalendar
-        guard let interval = cal.dateInterval(of: .month, for: Date()) else { return 0 }
-        return store.transactions
-            .filter { $0.date >= interval.start && $0.date < interval.end }
-            .filter { $0.amountCents < 0 }
-            .filter { $0.category == category }
-            .reduce(0) { $0 + abs($1.amountCents) }
+        localSpentCentsThisMonth(for: category, in: store)
     }
 
     private func usd(_ cents: Int) -> String {
@@ -400,7 +437,7 @@ private struct DashboardGoalPagerView: View {
     let activeGoals: [APIClient.DashboardActiveGoal]
     @Binding var selectedIndex: Int
 
-    private let barHeight: CGFloat = 32
+    private var barHeight: CGFloat { Theme.Home.goalBarHeight }
     private var goalTitleColor: Color { Theme.text }
 
     var body: some View {
@@ -466,7 +503,7 @@ private struct DashboardGoalPagerView: View {
 
 private struct DashboardGoalProgressPage: View {
     let goal: APIClient.DashboardActiveGoal
-    private let barHeight: CGFloat = 32
+    private var barHeight: CGFloat { Theme.Home.goalBarHeight }
     @State private var animatedProgress: Double = 0
 
     var body: some View {
@@ -522,7 +559,7 @@ private struct GoalProgressPage: View {
     @ObservedObject var store: TransactionStore
     let gapInsidePage: CGFloat
 
-    private let barHeight: CGFloat = 32
+    private var barHeight: CGFloat { Theme.Home.goalBarHeight }
     @State private var animatedProgress: Double = 0
 
     var body: some View {
@@ -559,24 +596,11 @@ private struct GoalProgressPage: View {
     // MARK: - Data (Dashboard 없을 때만 사용. 있으면 DashboardGoalProgressPage에서 API 값 사용)
 
     private func budgetCents(for category: BudgetCategory) -> Int {
-        switch category {
-        case .rent: return 1800 * 100
-        case .utilities: return 200 * 100
-        case .grocery: return 400 * 100
-        case .cafe: return 60 * 100
-        case .food: return 250 * 100
-        default: return 200 * 100
-        }
+        localBudgetCents(for: category)
     }
 
     private func spentCentsThisMonth(for category: BudgetCategory) -> Int {
-        let cal = MockData.usCalendar
-        guard let interval = cal.dateInterval(of: .month, for: Date()) else { return 0 }
-        return store.transactions
-            .filter { $0.date >= interval.start && $0.date < interval.end }
-            .filter { $0.amountCents < 0 }
-            .filter { $0.category == category }
-            .reduce(0) { $0 + abs($1.amountCents) }
+        localSpentCentsThisMonth(for: category, in: store)
     }
 
     private func usd(_ cents: Int) -> String {
@@ -584,3 +608,28 @@ private struct GoalProgressPage: View {
     }
 }
 
+
+// MARK: - 로컬 목표 계산 헬퍼 (Dashboard 없을 때만 사용. 있으면 API 값 사용)
+
+/// 카테고리별 월 예산 (cents). 백엔드 연동 시 Goal.monthlyBudgetCents 로 교체.
+private func localBudgetCents(for category: BudgetCategory) -> Int {
+    switch category {
+    case .rent:       return 1800 * 100
+    case .utilities:  return 200 * 100
+    case .grocery:    return 400 * 100
+    case .cafe:       return 60 * 100
+    case .food:       return 250 * 100
+    default:          return 200 * 100
+    }
+}
+
+/// 이번 달 해당 카테고리 지출 합계 (cents).
+private func localSpentCentsThisMonth(for category: BudgetCategory, in store: TransactionStore) -> Int {
+    let cal = MockData.usCalendar
+    guard let interval = cal.dateInterval(of: .month, for: Date()) else { return 0 }
+    return store.transactions
+        .filter { $0.date >= interval.start && $0.date < interval.end }
+        .filter { $0.amountCents < 0 }
+        .filter { $0.category == category }
+        .reduce(0) { $0 + abs($1.amountCents) }
+}

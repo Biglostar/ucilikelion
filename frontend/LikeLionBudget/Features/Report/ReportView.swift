@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ReportView: View {
     @ObservedObject var store: TransactionStore
+    @EnvironmentObject var tutorialStore: TutorialStore
 
     // MARK: - State
 
@@ -56,39 +57,74 @@ struct ReportView: View {
     // MARK: - Body
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: Theme.spacingStandard) {
+        ZStack {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: Theme.spacingStandard) {
 
-                VStack(spacing: Theme.spacingLarge) {
-                    DisclosureCard(
-                            title: "월간 리포트",
-                            subtitle: monthlyHeaderSubtitle(for: selectedMonth),
-                            isExpanded: $isMonthlyExpanded
-                        ) {
-                            MonthlyReportExpanded(store: store, selectedMonth: $selectedMonth)
-                        }
-
+                    VStack(spacing: Theme.spacingLarge) {
                         DisclosureCard(
-                            title: "고정지출",
-                            subtitle: fixedHeaderSubtitle(groups: detectedFixedGroups),
-                            isExpanded: $isFixedExpanded
-                        ) {
-                            FixedCostsExpanded(groups: detectedFixedGroups, expandAll: false)
+                                title: "월간 리포트",
+                                subtitle: monthlyHeaderSubtitle(for: selectedMonth),
+                                isExpanded: $isMonthlyExpanded
+                            ) {
+                                MonthlyReportExpanded(store: store, selectedMonth: $selectedMonth)
+                            }
+                            // 튜토리얼 monthlyReport 프레임 등록
+                            .background(GeometryReader { bg in
+                                Color.clear.onAppear {
+                                    tutorialStore.registerFrame(bg.frame(in: .global), for: .monthlyReport)
+                                }
+                            })
+
+                            DisclosureCard(
+                                title: "고정지출",
+                                subtitle: fixedHeaderSubtitle(groups: detectedFixedGroups),
+                                isExpanded: $isFixedExpanded
+                            ) {
+                                FixedCostsExpanded(groups: detectedFixedGroups, expandAll: false)
+                            }
+                            // 튜토리얼 fixedCosts 프레임 등록
+                            .background(GeometryReader { bg in
+                                Color.clear.onAppear {
+                                    tutorialStore.registerFrame(bg.frame(in: .global), for: .fixedCosts)
+                                }
+                            })
                         }
                     }
+                    .padding(.horizontal, Theme.screenHorizontal)
+                    .padding(.top, Theme.screenTop + Theme.screenTopNavExtra)
+                    .padding(.bottom, Theme.screenBottom)
                 }
-                .padding(.horizontal, Theme.screenHorizontal)
-                .padding(.top, Theme.screenTop + Theme.screenTopNavExtra)
-                .padding(.bottom, Theme.screenBottom)
+                .background(Color.white)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Text("리포트")
+                            .font(.custom(Theme.fontLaundry, size: Theme.titleSize))
+                            .foregroundStyle(Theme.rose)
+                    }
+                }
             }
-            .background(Color.white)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("리포트")
-                        .font(.custom(Theme.fontLaundry, size: Theme.titleSize))
-                        .foregroundStyle(Theme.rose)
-                }
+
+            // 튜토리얼 오버레이 (리포트 탭 단계에서만 표시)
+            if tutorialStore.isActive && tutorialStore.currentStep.requiredTab == 2 {
+                TutorialOverlayView(store: tutorialStore)
+            }
+        }
+        // 튜토리얼: monthlyReport 단계 → 카드 자동 펼치기
+        .onChange(of: tutorialStore.shouldExpandMonthlyReport) { _, should in
+            guard should else { return }
+            tutorialStore.shouldExpandMonthlyReport = false
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                isMonthlyExpanded = true
+            }
+        }
+        // 튜토리얼: fixedCosts 단계 → 카드 자동 펼치기
+        .onChange(of: tutorialStore.shouldExpandFixedCosts) { _, should in
+            guard should else { return }
+            tutorialStore.shouldExpandFixedCosts = false
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                isFixedExpanded = true
             }
         }
     }
@@ -252,7 +288,7 @@ struct CategoryPieChartView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.spacingSmall + 4) {
+        VStack(alignment: .leading, spacing: Theme.spacingCompact) {
             Text("카테고리별 비중")
                 .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
                 .foregroundStyle(Theme.text)
@@ -340,7 +376,7 @@ private struct CategoryPieChartFullSheet: View {
                     .frame(width: 200, height: 200)
                     .padding(.top, 24)
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Theme.spacingCompact) {
                         ForEach(Array(breakdown.enumerated()), id: \.offset) { idx, item in
                             HStack(spacing: 12) {
                                 Circle()
@@ -496,7 +532,7 @@ struct FixedCostsExpanded: View {
     @State private var expandedTitles: Set<String> = []
 
     var body: some View {
-        VStack(spacing: Theme.spacingSmall + 4) {
+        VStack(spacing: Theme.spacingCompact) {
             ForEach(groups) { g in
                 let isExpanded = expandAll || expandedTitles.contains(g.title)
                 VStack(spacing: 0) {
@@ -552,12 +588,12 @@ struct FixedCostsExpanded: View {
                                         .fontWeight(.semibold)
                                         .foregroundStyle(Theme.minus)
                                 }
-                                .padding(.vertical, Theme.spacingSmall + 4)
+                                .padding(.vertical, Theme.spacingCompact)
 
                                 Divider().opacity(0.25)
                             }
                         }
-                        .padding(.leading, Theme.spacingSmall + 4)
+                        .padding(.leading, Theme.spacingCompact)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
@@ -586,7 +622,7 @@ struct DisclosureCard<Content: View>: View {
                     isExpanded.toggle()
                 }
             } label: {
-                HStack(alignment: .center, spacing: Theme.spacingSmall + 4) {
+                HStack(alignment: .center, spacing: Theme.spacingCompact) {
                     VStack(alignment: .leading, spacing: Theme.spacingTight) {
                         Text(title)
                             .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
@@ -616,7 +652,7 @@ struct DisclosureCard<Content: View>: View {
 struct ChartPlaceholderCard: View {
     let title: String
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.spacingSmall + 4) {
+        VStack(alignment: .leading, spacing: Theme.spacingCompact) {
             Text(title)
                 .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
                 .foregroundStyle(Theme.text)
@@ -646,7 +682,7 @@ struct ChartPlaceholderCard: View {
 struct AIFeedbackMiniCard: View {
     let text: String
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.spacingSmall + 4) {
+        VStack(alignment: .leading, spacing: Theme.spacingCompact) {
             Text("AI 소비 총평")
                 .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
                 .foregroundStyle(Theme.text)
