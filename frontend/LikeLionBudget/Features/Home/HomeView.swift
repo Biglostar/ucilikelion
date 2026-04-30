@@ -18,6 +18,10 @@ struct HomeView: View {
             
             MonthCalendarView(month: $selectedMonth, store: store)
         }
+        .task {
+            // This triggers the Railway API call the exact moment the screen loads!
+            await transactionStore.fetchTransactions()
+        }
         .padding()
     }
 }

@@ -27,9 +27,12 @@ app.use("/api/transactions", transactionRoutes);
 
 app.use('/api/plaid', plaidRoutes);
 
+// Grab Railway's port if it exists, otherwise use 3000 for local testing
+const port = Number(process.env.PORT) || 3000;
+
 // Start Server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Server is running on port ${port}`);
 });
 
 async function testDrive() {
