@@ -20,3 +20,7 @@ yarn-error.log*
 
 # 백업 및 임시 파일
 .vscode/
+
+# Xcode user data
+**/xcuserdata/
+**/*.xcuserstate
