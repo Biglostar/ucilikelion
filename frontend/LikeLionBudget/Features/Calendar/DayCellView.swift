@@ -10,36 +10,41 @@ import SwiftUI
 struct DayCellView: View {
     let date: Date
     let netCents: Int
+    let hasTransactions: Bool
     let isSelected: Bool
+    var isCurrentMonth: Bool = true
 
     private var isToday: Bool {
         MockData.usCalendar.isDateInToday(date)
     }
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: Theme.spacingTight) {
             Text("\(dayNumber(date))")
-                .font(.caption.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isCurrentMonth ? Color.black : Theme.weekdaySimbol)
 
-            Text(netText(netCents))
-                .font(.caption2)
-                .foregroundStyle(netCents >= 0 ? Color.blue : Color.red)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            if isCurrentMonth, !netText.isEmpty {
+                Text(netText)
+                    .font(.custom(Theme.fontLaundry, size: Theme.captionSmallSize))
+                    .foregroundStyle(netCents >= 0 ? Theme.plus : Theme.minus)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 42)
-        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .padding(.vertical, Theme.spacingSmall)
         .background(backgroundColor)
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(borderColor, lineWidth: 1.8)
+            RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous)
+                .stroke(borderColor, lineWidth: Theme.strokeLineWidthCell)
         )
     }
 
     private var backgroundColor: Color {
-        if isSelected { return Color.green.opacity(0.22) }
-        if isToday { return Color.yellow.opacity(0.25) }
-        return Color.green.opacity(0.06)
+        if !isCurrentMonth { return Color.clear }
+        if hasTransactions { return Theme.beige }
+        return Color.clear
     }
 
     private var borderColor: Color {
@@ -52,9 +57,9 @@ struct DayCellView: View {
         MockData.usCalendar.component(.day, from: date)
     }
 
-    private func netText(_ cents: Int) -> String {
-        if cents == 0 { return "" }
-        return Money.usdSignedString(fromCents: cents)
+    private var netText: String {
+        if !hasTransactions { return "" }
+        return Money.usdSignedString(fromCents: netCents)
     }
 }
 
