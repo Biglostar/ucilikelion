@@ -9,6 +9,7 @@ import SwiftUI
 
 struct RootTabView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
+    @EnvironmentObject private var tutorialStore: TutorialStore
 
     @StateObject private var transactionStore = TransactionStore()
     @StateObject private var goalsStore = GoalsStore()
@@ -45,5 +46,10 @@ struct RootTabView: View {
                 .tag(3)
         }
         .tint(Theme.rose)
+        // 튜토리얼 단계에 맞춰 탭 자동 전환
+        .onChange(of: tutorialStore.currentStep) { _, step in
+            guard tutorialStore.isActive else { return }
+            withAnimation { selectedTab = step.requiredTab }
+        }
     }
 }

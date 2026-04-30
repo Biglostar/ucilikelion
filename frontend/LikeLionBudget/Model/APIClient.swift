@@ -9,14 +9,8 @@ import Foundation
 
 // MARK: - API Base URL
 
-/// 발표 후 백엔드 연동 시: TransactionStore/GoalsStore/HomeView에서 [백엔드 연동] 주석 해제하고,
-/// 아래 baseURLString을 실제 서버 URL로 변경.
 enum APIConfig {
-    #if DEBUG
-    static let baseURLString = "https://090cca8b-8fed-4588-a62a-e15abe586692.mock.pstmn.io/api"
-    #else
-    static let baseURLString = "https://your-api-server.com/api"
-    #endif
+    static let baseURLString = "https://ucilikelion-production.up.railway.app/api"
 }
 
 // MARK: - API Error
@@ -310,16 +304,11 @@ struct APIClient {
 
     func fetchTransactions(from: Date? = nil, to: Date? = nil) async throws -> [BackendTransaction] {
         var items: [URLQueryItem] = []
-        let dateFormatter = DateFormatter()
-        dateFormatter.calendar = Calendar(identifier: .gregorian)
-        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-
         if let from {
-            items.append(URLQueryItem(name: "from", value: dateFormatter.string(from: from)))
+            items.append(URLQueryItem(name: "from", value: AppFormatters.apiDate.string(from: from)))
         }
         if let to {
-            items.append(URLQueryItem(name: "to", value: dateFormatter.string(from: to)))
+            items.append(URLQueryItem(name: "to", value: AppFormatters.apiDate.string(from: to)))
         }
 
         let request = try makeRequest(
@@ -430,19 +419,14 @@ struct APIClient {
         startDate: Date,
         endDate: Date
     ) async throws -> BackendGoal {
-        let dateFormatter = DateFormatter()
-        dateFormatter.calendar = Calendar(identifier: .gregorian)
-        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-
         let body = CreateGoalRequest(
             title: title,
             memo: memo,
             icon: icon,
             category: category,
             monthlyBudgetCents: monthlyBudgetCents,
-            startDate: dateFormatter.string(from: startDate),
-            endDate: dateFormatter.string(from: endDate)
+            startDate: AppFormatters.apiDate.string(from: startDate),
+            endDate: AppFormatters.apiDate.string(from: endDate)
         )
         let request = try makeRequest(
             path: "goals",
@@ -489,6 +473,18 @@ struct APIClient {
     func fetchDashboard() async throws -> DashboardResponse {
         let request = try makeRequest(path: "dashboard", method: "GET")
         return try await send(request, as: DashboardResponse.self)
+    }
+
+    // MARK: - FCM Token
+
+    struct FCMTokenRequest: Encodable {
+        let fcmToken: String
+    }
+
+    func updateFCMToken(_ token: String) async throws {
+        let body = FCMTokenRequest(fcmToken: token)
+        let request = try makeRequest(path: "users/fcm-token", method: "PATCH", body: body)
+        _ = try await sendData(request)
     }
 }
 

@@ -16,6 +16,7 @@ struct TransactionEditorView: View {
 
     let mode: Mode
     @ObservedObject var store: TransactionStore
+    @EnvironmentObject var tutorialStore: TutorialStore
     @Environment(\.dismiss) private var dismiss
 
     // MARK: - State
@@ -117,6 +118,10 @@ struct TransactionEditorView: View {
                 }
             }
         }
+        // 튜토리얼 addTransaction / editTransaction 단계 오버레이
+        .overlay {
+            TutorialSheetOverlayView(store: tutorialStore, activeSteps: [.addTransaction, .editTransaction])
+        }
     }
 
     // MARK: - Blocks
@@ -168,7 +173,7 @@ struct TransactionEditorView: View {
 
     @ViewBuilder
     private func fixedBlock() -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.spacingCompact) {
             Toggle(isOn: $isFixed) {
                 Text("고정지출")
                     .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
@@ -185,7 +190,7 @@ struct TransactionEditorView: View {
 
     @ViewBuilder
     private func dateTimeBlock() -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.spacingCompact) {
             Text("날짜 · 시간")
                 .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                 .foregroundStyle(Theme.text)
@@ -202,7 +207,7 @@ struct TransactionEditorView: View {
 
     @ViewBuilder
     private func buttonsBlock() -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Theme.spacingCompact) {
             Button { save() } label: {
                 Text(isEdit ? "저장" : "추가하기")
                     .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
@@ -284,10 +289,7 @@ struct TransactionEditorView: View {
     }
 
     private func koDateTitle(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "M월 d일"
-        return f.string(from: date)
+        AppFormatters.koDayMonth.string(from: date)
     }
 }
 

@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		B0212D722F50DA85008791A8 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = B0GSPDP0012F5B0002000E1463 /* GoogleSignIn */; };
 		B0212D832F52DD7F008791A8 /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = B0212D822F52DD7F008791A8 /* LinkKit */; };
+		B0AA10022F5B0001000E1463 /* TutorialStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0AA10012F5B0001000E1463 /* TutorialStep.swift */; };
+		B0AA10042F5B0001000E1463 /* TutorialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0AA10032F5B0001000E1463 /* TutorialStore.swift */; };
+		B0AA10062F5B0001000E1463 /* TutorialOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0AA10052F5B0001000E1463 /* TutorialOverlayView.swift */; };
 		B0B398C92F1782F4000E1463 /* MonthCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B398C82F1782F4000E1463 /* MonthCalendarView.swift */; };
 		B0B398CB2F178303000E1463 /* DayCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B398CA2F178303000E1463 /* DayCellView.swift */; };
 		B0B398CD2F17830D000E1463 /* DayDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B398CC2F17830D000E1463 /* DayDetailSheet.swift */; };
@@ -19,6 +22,7 @@
 		B0B398D22F178BBE000E1463 /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B398C32F1745F6000E1463 /* Transaction.swift */; };
 		B0B398D42F188B8B000E1463 /* TransactionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B398D32F188B8B000E1463 /* TransactionStore.swift */; };
 		B0E9A0012F5A0001000E1463 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9A0002F5A0001000E1463 /* APIClient.swift */; };
+		B0E9A0042F5A0001000E1463 /* AppFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9A0032F5A0001000E1463 /* AppFormatters.swift */; };
 		B0FA95092F213C74009D6BDB /* Goal.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95082F213C74009D6BDB /* Goal.swift */; };
 		B0FA950B2F213D64009D6BDB /* GoalsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA950A2F213D64009D6BDB /* GoalsStore.swift */; };
 		B0FA950D2F219466009D6BDB /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA950C2F219466009D6BDB /* RootTabView.swift */; };
@@ -52,6 +56,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		B0AA10012F5B0001000E1463 /* TutorialStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialStep.swift; sourceTree = "<group>"; };
+		B0AA10032F5B0001000E1463 /* TutorialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialStore.swift; sourceTree = "<group>"; };
+		B0AA10052F5B0001000E1463 /* TutorialOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialOverlayView.swift; sourceTree = "<group>"; };
 		B0B398AF2F17445A000E1463 /* LikeLionBudget.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LikeLionBudget.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0B398C32F1745F6000E1463 /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		B0B398C42F1746B5000E1463 /* DaySummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaySummary.swift; sourceTree = "<group>"; };
@@ -63,6 +70,7 @@
 		B0B398CC2F17830D000E1463 /* DayDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayDetailSheet.swift; sourceTree = "<group>"; };
 		B0B398D32F188B8B000E1463 /* TransactionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionStore.swift; sourceTree = "<group>"; };
 		B0E9A0002F5A0001000E1463 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		B0E9A0032F5A0001000E1463 /* AppFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFormatters.swift; sourceTree = "<group>"; };
 		B0FA95082F213C74009D6BDB /* Goal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Goal.swift; sourceTree = "<group>"; };
 		B0FA950A2F213D64009D6BDB /* GoalsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsStore.swift; sourceTree = "<group>"; };
 		B0FA950C2F219466009D6BDB /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
@@ -129,6 +137,16 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B0AA10072F5B0001000E1463 /* Tutorial */ = {
+			isa = PBXGroup;
+			children = (
+				B0AA10012F5B0001000E1463 /* TutorialStep.swift */,
+				B0AA10032F5B0001000E1463 /* TutorialStore.swift */,
+				B0AA10052F5B0001000E1463 /* TutorialOverlayView.swift */,
+			);
+			path = Tutorial;
+			sourceTree = "<group>";
+		};
 		B0B398A62F17445A000E1463 = {
 			isa = PBXGroup;
 			children = (
@@ -158,6 +176,7 @@
 				B0B398C32F1745F6000E1463 /* Transaction.swift */,
 				B0B398D32F188B8B000E1463 /* TransactionStore.swift */,
 				B0E9A0002F5A0001000E1463 /* APIClient.swift */,
+				B0E9A0032F5A0001000E1463 /* AppFormatters.swift */,
 				B0FA95082F213C74009D6BDB /* Goal.swift */,
 				B0FA950A2F213D64009D6BDB /* GoalsStore.swift */,
 				B0FA952B2F28A853009D6BDB /* RecurringDetector.swift */,
@@ -180,6 +199,7 @@
 				B0FA95142F2197BA009D6BDB /* Settings */,
 				B0FA95132F2197B4009D6BDB /* Report */,
 				B0FA95122F2197AF009D6BDB /* Goals */,
+				B0AA10072F5B0001000E1463 /* Tutorial */,
 				B0B398C22F174572000E1463 /* Transactions */,
 				B0FA95532F2F0B0E009D6BDB /* Color+Hex.swift */,
 				B0FA95552F2F2B07009D6BDB /* Theme.swift */,
@@ -347,6 +367,10 @@
 				B0FA95162F219862009D6BDB /* ReportView.swift in Sources */,
 				B0B398D42F188B8B000E1463 /* TransactionStore.swift in Sources */,
 				B0E9A0012F5A0001000E1463 /* APIClient.swift in Sources */,
+				B0E9A0042F5A0001000E1463 /* AppFormatters.swift in Sources */,
+				B0AA10022F5B0001000E1463 /* TutorialStep.swift in Sources */,
+				B0AA10042F5B0001000E1463 /* TutorialStore.swift in Sources */,
+				B0AA10062F5B0001000E1463 /* TutorialOverlayView.swift in Sources */,
 				B0FA95182F219877009D6BDB /* SettingsView.swift in Sources */,
 				B0FA951E2F219F1B009D6BDB /* GoalsPickerSheet.swift in Sources */,
 				B0B398D12F178BB8000E1463 /* DaySummary.swift in Sources */,

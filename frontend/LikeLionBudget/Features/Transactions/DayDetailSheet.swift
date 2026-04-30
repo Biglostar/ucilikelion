@@ -11,6 +11,7 @@ import UIKit
 struct DayDetailSheet: View {
     let date: Date
     @ObservedObject var store: TransactionStore
+    @EnvironmentObject var tutorialStore: TutorialStore
 
     private var cardCorner: CGFloat { Theme.cardCorner }
 
@@ -78,6 +79,7 @@ struct DayDetailSheet: View {
                 Button { activeSheet = .add } label: {
                     ZStack {
                         Circle()
+
                             .fill(Color(UIColor.tertiarySystemFill))
                         Image(systemName: "plus")
                             .font(.system(size: 18, weight: .medium))
@@ -94,6 +96,24 @@ struct DayDetailSheet: View {
         }
         .sheet(item: $activeSheet) { sheetItem in
             sheetContentFor(sheetItem: sheetItem)
+        }
+        // 튜토리얼 dayDetail 단계 오버레이
+        .overlay {
+            TutorialSheetOverlayView(store: tutorialStore, activeSteps: [.dayDetail])
+        }
+        // 튜토리얼: addTransaction 단계 → 추가 에디터 자동 오픈
+        .onChange(of: tutorialStore.shouldOpenAddTransaction) { _, should in
+            guard should else { return }
+            tutorialStore.shouldOpenAddTransaction = false
+            activeSheet = .add
+        }
+        // 튜토리얼: editTransaction 단계 → 수정 에디터 자동 오픈 (첫 번째 거래 내역 사용)
+        .onChange(of: tutorialStore.shouldOpenEditTransaction) { _, should in
+            guard should else { return }
+            tutorialStore.shouldOpenEditTransaction = false
+            if let firstTx = transactions.first {
+                activeSheet = .edit(firstTx)
+            }
         }
     }
 
@@ -212,7 +232,7 @@ struct DayDetailSheet: View {
                     .foregroundStyle(Theme.text.opacity(0.65))
             }
         }
-        .padding(.vertical, Theme.spacingSmall + 4)
+        .padding(.vertical, Theme.spacingCompact)
         .padding(.horizontal, Theme.cardPadding)
         .background(
             RoundedRectangle(cornerRadius: cardCorner, style: .continuous)
@@ -245,16 +265,10 @@ struct DayDetailSheet: View {
     }
 
     private func koDateTitle(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "M월 d일"
-        return f.string(from: date)
+        AppFormatters.koDayMonth.string(from: date)
     }
 
     private func timeText(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "HH:mm"
-        return f.string(from: date)
+        AppFormatters.koTime.string(from: date)
     }
 }

@@ -60,7 +60,7 @@ struct AddGoalView: View {
                         }
                         .padding(.vertical, 4)
 
-                        VStack(spacing: 10) {
+                        VStack(spacing: Theme.spacingCompact) {
                             Button { saveGoal() } label: {
                                 Text(isEditMode ? "저장" : "추가하기")
                                     .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
