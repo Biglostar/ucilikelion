@@ -23,6 +23,13 @@ struct Goal: Identifiable, Codable, Equatable, Hashable {
     var statusText: String
     var category: BudgetCategory
 
+    // Backend sync fields (nil when not yet synced)
+    var backendId: String?
+    var monthlyBudgetCents: Int?
+    var spentPct: Double?
+    var remainingPct: Double?
+    var overBudget: Bool?
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -30,7 +37,12 @@ struct Goal: Identifiable, Codable, Equatable, Hashable {
         isSelected: Bool = true,
         isNotificationsOn: Bool = true,
         statusText: String,
-        category: BudgetCategory
+        category: BudgetCategory,
+        backendId: String? = nil,
+        monthlyBudgetCents: Int? = nil,
+        spentPct: Double? = nil,
+        remainingPct: Double? = nil,
+        overBudget: Bool? = nil
     ) {
         self.id = id
         self.title = title
@@ -39,5 +51,10 @@ struct Goal: Identifiable, Codable, Equatable, Hashable {
         self.isNotificationsOn = isNotificationsOn
         self.statusText = statusText
         self.category = category
+        self.backendId = backendId
+        self.monthlyBudgetCents = monthlyBudgetCents
+        self.spentPct = spentPct
+        self.remainingPct = remainingPct
+        self.overBudget = overBudget
     }
 }
