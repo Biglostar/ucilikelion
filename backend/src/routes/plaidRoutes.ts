@@ -9,6 +9,7 @@ import {
 const router = Router();
 
 // real Frontend routes
+router.get('/create_link_token', createLinkToken);
 router.post('/create_link_token', createLinkToken);
 router.post('/exchange_public_token', exchangePublicToken);
 router.post('/sync', syncTransactions);
