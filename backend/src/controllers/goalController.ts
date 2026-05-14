@@ -16,11 +16,9 @@ export async function getGoals(req: Request, res: Response) {
       orderBy: { createdAt: "desc" },
     });
 
-    // 게이지바 계산 붙여서 반환
     const withGauge = goals.map((g: any) => {
       const budget = g.monthlyBudgetCents;
 
-      // budget이 0이면 remaining을 0
       if (!budget || budget <= 0) {
         return {
           ...g,
