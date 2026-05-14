@@ -4,7 +4,6 @@
 //
 //  Created by samuel kim on 1/21/26.
 //
-//
 
 import Foundation
 import Combine
@@ -16,30 +15,19 @@ final class GoalsStore: ObservableObject {
     @Published private(set) var goals: [Goal] = []
 
     private var _realGoals: [Goal] = []
-
-    // [백엔드 연동] 발표 후 API 사용 시 아래 주석 해제
-    // private let api = APIClient()
-
+    private let api = APIClient()
     private let key = "LikeLionBudget.Goals.v1"
 
     // MARK: - Init
 
     init() {
-        _realGoals = Self.load(key: key) ?? Self.defaultRealGoals
+        // Start from whatever was cached locally, then refresh from the server
+        _realGoals = Self.load(key: key) ?? []
         goals = _realGoals
-        // [백엔드 연동] API에서 목표 불러오기: Task { await loadRemoteGoalsIfNeeded() }
+        Task { await loadRemoteGoals() }
     }
 
-    private func saveRealGoals() {
-        do {
-            let data = try JSONEncoder().encode(_realGoals)
-            UserDefaults.standard.set(data, forKey: key)
-        } catch {
-            print("⚠️ Goals save failed:", error)
-        }
-    }
-
-    // MARK: - Public Access (selectedGoals / goal / binding)
+    // MARK: - Public Access
 
     var selectedGoals: [Goal] {
         goals.filter { $0.isSelected }
@@ -61,15 +49,46 @@ final class GoalsStore: ObservableObject {
 
     func updateGoal(_ goal: Goal) {
         guard let idx = _realGoals.firstIndex(where: { $0.id == goal.id }) else { return }
-        _realGoals[idx] = goal
+        // Preserve backendId and budget fields since the editor rebuilds Goal without them
+        let existingBackendId = _realGoals[idx].backendId
+        let existingBudget = _realGoals[idx].monthlyBudgetCents
+        var enriched = goal
+        enriched.backendId = existingBackendId
+        if enriched.monthlyBudgetCents == nil { enriched.monthlyBudgetCents = existingBudget }
+        _realGoals[idx] = enriched
         goals = _realGoals
         saveRealGoals()
+
+        guard let backendId = existingBackendId else { return }
+        Task {
+            do {
+                try await api.updateGoal(
+                    id: backendId,
+                    title: goal.title,
+                    memo: goal.statusText.isEmpty ? nil : goal.statusText,
+                    category: goal.category,
+                    monthlyBudgetCents: nil
+                )
+            } catch {
+                print("⚠️ updateGoal API failed:", error)
+            }
+        }
     }
 
     func deleteGoal(id: UUID) {
+        let backendId = _realGoals.first(where: { $0.id == id })?.backendId
         _realGoals.removeAll { $0.id == id }
         goals = _realGoals
         saveRealGoals()
+
+        guard let backendId else { return }
+        Task {
+            do {
+                try await api.deleteGoal(id: backendId)
+            } catch {
+                print("⚠️ deleteGoal API failed:", error)
+            }
+        }
     }
 
     func setEnabled(_ isOn: Bool, for goalId: UUID) {
@@ -92,10 +111,19 @@ final class GoalsStore: ObservableObject {
         _realGoals.insert(goal, at: 0)
         goals = _realGoals
         saveRealGoals()
-        // Task { await postNewGoalToBackend(goal) }
+        Task { await postNewGoalToBackend(goal) }
     }
 
     // MARK: - Persistence
+
+    private func saveRealGoals() {
+        do {
+            let data = try JSONEncoder().encode(_realGoals)
+            UserDefaults.standard.set(data, forKey: key)
+        } catch {
+            print("⚠️ Goals save failed:", error)
+        }
+    }
 
     private static func load(key: String) -> [Goal]? {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
@@ -107,33 +135,55 @@ final class GoalsStore: ObservableObject {
         }
     }
 
-    /// 튜토리얼 제거 후 쓰는 기본 목표 (저장된 게 없을 때)
-    private static var defaultRealGoals: [Goal] {
-        [
-            Goal(
-                title: "생활비 줄이기",
-                type: .reduceSpending,
-                isSelected: true,
-                isNotificationsOn: true,
-                statusText: "이번 달 생활비 줄이자",
-                category: .utilities
-            ),
-            Goal(
-                title: "외식비 줄이기",
-                type: .reduceSpending,
-                isSelected: true,
-                isNotificationsOn: true,
-                statusText: "외식 대신 집밥",
-                category: .food
-            ),
-            Goal(
-                title: "카페비 줄이기",
-                type: .reduceSpending,
-                isSelected: true,
-                isNotificationsOn: true,
-                statusText: "",
-                category: .cafe
+    // MARK: - Remote
+
+    private func loadRemoteGoals() async {
+        do {
+            let backendGoals = try await api.fetchGoals()
+            let mapped: [Goal] = backendGoals.map { bg in
+                Goal(
+                    title: bg.title,
+                    type: .reduceSpending,
+                    isSelected: true,
+                    isNotificationsOn: true,
+                    statusText: bg.memo ?? "",
+                    category: bg.category,
+                    backendId: bg.id,
+                    monthlyBudgetCents: bg.monthlyBudgetCents,
+                    spentPct: bg.spentPct,
+                    remainingPct: bg.remainingPct,
+                    overBudget: bg.overBudget
+                )
+            }
+            _realGoals = mapped
+            goals = mapped
+            saveRealGoals()
+        } catch {
+            print("⚠️ fetchGoals API failed:", error)
+        }
+    }
+
+    private func postNewGoalToBackend(_ goal: Goal) async {
+        do {
+            let now = Date()
+            let bg = try await api.createGoal(
+                title: goal.title,
+                memo: goal.statusText.isEmpty ? nil : goal.statusText,
+                icon: nil,
+                category: goal.category,
+                startDate: now,
+                endDate: now,
+                budgetSource: "AUTO_AVG_3M"
             )
-        ]
+            // Store the backend ID on the local goal so future edits/deletes work
+            if let idx = _realGoals.firstIndex(where: { $0.id == goal.id }) {
+                _realGoals[idx].backendId = bg.id
+                _realGoals[idx].monthlyBudgetCents = bg.monthlyBudgetCents
+                goals = _realGoals
+                saveRealGoals()
+            }
+        } catch {
+            print("⚠️ createGoal API failed:", error)
+        }
     }
 }

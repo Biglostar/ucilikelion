@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../prisma';
 
-const prisma = new PrismaClient();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export async function googleLogin(req: Request, res: Response) {

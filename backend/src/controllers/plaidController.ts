@@ -22,7 +22,7 @@ export const createLinkToken = async (req: Request, res: Response) => {
       language: 'en',
     });
 
-    res.json(response.data);
+    res.json({ linkToken: response.data.link_token });
   } catch (error) {
     console.error("Link Token Error:", error);
     res.status(500).json({ error: "Failed to create link token" });

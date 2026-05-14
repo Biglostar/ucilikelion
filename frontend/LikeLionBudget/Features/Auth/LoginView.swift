@@ -207,22 +207,38 @@ struct LoginView: View {
         }
 
         GIDSignIn.sharedInstance.signIn(withPresenting: rootVC) { [self] result, error in
-            isSigningIn = false
             if let error = error {
+                isSigningIn = false
                 let nsError = error as NSError
-                if nsError.code == -5 || nsError.domain == "com.google.GIDSignIn" && nsError.code == -1 {
+                if nsError.code == -5 || (nsError.domain == "com.google.GIDSignIn" && nsError.code == -1) {
                     return
                 }
                 errorMessage = "로그인에 실패했어요. 다시 시도해 주세요."
                 return
             }
-            guard let result = result else { return }
+            guard let result = result else {
+                isSigningIn = false
+                return
+            }
+
             let profile = result.user.profile
-            settingsStore.setGoogleUser(
-                displayName: profile?.name,
-                email: profile?.email
-            )
-            dismiss()
+            let idToken = result.user.idToken?.tokenString
+
+            Task { @MainActor in
+                defer { isSigningIn = false }
+
+                if let token = idToken {
+                    do {
+                        let response = try await APIClient().googleLogin(idToken: token)
+                        UserIdentity.setBackendUserId(response.user.id)
+                    } catch {
+                        // Backend auth failure is non-fatal — continue with local session
+                    }
+                }
+
+                settingsStore.setGoogleUser(displayName: profile?.name, email: profile?.email)
+                dismiss()
+            }
         }
     }
 

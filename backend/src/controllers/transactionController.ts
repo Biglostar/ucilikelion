@@ -176,39 +176,68 @@ const totalCheckpoint = getNaggingCheckpoint(user.lastTotalAlertPct!, totalRemai
         .catch(e => console.error("Push failed:", e));
     }
 
-    return res.status(201).json(result);
+    return res.status(201).json(result.transaction);
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Transaction creation failed" });
   }
 }
 
-export async function deleteTransaction(req: Request, res: Response) {
+export async function updateTransaction(req: Request, res: Response) {
   try {
-    const rawUserId = req.header("x-user-id");
-    const userId = typeof rawUserId === 'string' ? rawUserId : undefined;
+    const userId = req.header("x-user-id") as string;
+    if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
 
-    const { id } = req.params;
+    const id = req.params.id as string;
+    const { title, amountCents, type, category, occurredAt, isFixed, note } = req.body;
 
-    if (!userId || typeof id !== 'string') {
-      return res.status(400).json({ error: "Missing required information or invalid ID" });
-    }
-    
-    // Prisma 삭제
-    const transaction = await prisma.transaction.delete({ 
-      where: { id } 
+    const existing = await prisma.transaction.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: "Transaction not found" });
+    if (existing.userId !== userId) return res.status(403).json({ error: "Unauthorized" });
+
+    const updated = await prisma.transaction.update({
+      where: { id },
+      data: {
+        ...(title !== undefined && { title: String(title) }),
+        ...(amountCents !== undefined && { amountCents: Number(amountCents) }),
+        ...(type !== undefined && { type: type as "INCOME" | "EXPENSE" }),
+        ...(category !== undefined && { category: String(category) }),
+        ...(occurredAt !== undefined && { occurredAt: new Date(occurredAt as string) }),
+        ...(isFixed !== undefined && { isFixed: Boolean(isFixed) }),
+        ...(note !== undefined && { note: note as string | null }),
+      }
     });
 
-    // 삭제된 금액만큼 테이블에서 차감
-    if (transaction.type === "EXPENSE") {
-      await updateMonthlySummary(
-        transaction.userId, 
-        transaction.occurredAt, 
-        -transaction.amountCents
-      );
+    // Sync monthly summary delta when expense amount changes
+    if (existing.type === "EXPENSE" && amountCents !== undefined && existing.amountCents !== amountCents) {
+      await updateMonthlySummary(userId, existing.occurredAt, amountCents - existing.amountCents);
     }
 
-    return res.status(200).json({ message: "Deleted successfully", transaction });
+    return res.json(updated);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Failed to update transaction" });
+  }
+}
+
+export async function deleteTransaction(req: Request, res: Response) {
+  try {
+    const userId = req.header("x-user-id") as string;
+    const id = req.params.id as string;
+
+    if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
+
+    const existing = await prisma.transaction.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: "Transaction not found" });
+    if (existing.userId !== userId) return res.status(403).json({ error: "Unauthorized" });
+
+    await prisma.transaction.delete({ where: { id } });
+
+    if (existing.type === "EXPENSE") {
+      await updateMonthlySummary(userId, existing.occurredAt, -existing.amountCents);
+    }
+
+    return res.status(200).json({ message: "Deleted successfully" });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Failed to delete transaction" });
