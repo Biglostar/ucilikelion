@@ -157,8 +157,6 @@ const totalCheckpoint = getNaggingCheckpoint(user.lastTotalAlertPct!, totalRemai
         });
       }
 
-
-
       return { 
         transaction, 
         alert: { 

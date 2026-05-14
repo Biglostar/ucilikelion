@@ -83,7 +83,16 @@ cron.schedule('1 0 1 * *', async () => {
       await syncMonthlySummary(user.id, year, month);
       
       const report = await generateMonthlyReport(user.id);
-      
+
+      await prisma.report.create({
+        data: {
+          userId: user.id,
+          title: `${year}년 ${month}월 소비 리포트`,
+          content: report,
+          type: "MONTHLY_ANALYSIS",
+        },
+      });
+
       await sendPushNotification(user.fcmToken!, `${month}월 정산 리포트`, report);
       // console.log(`리포트 전송 완료: ${user.nickname}`);
     } catch (error) {
