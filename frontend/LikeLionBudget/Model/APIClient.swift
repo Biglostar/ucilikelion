@@ -25,15 +25,28 @@ enum APIError: Error {
 // MARK: - User Identity (x-user-id)
 
 enum UserIdentity {
-    private static let key = "LikeLionBudget.UserId"
+    private static let localKey = "LikeLionBudget.UserId"
+    private static let backendKey = "LikeLionBudget.BackendUserId"
 
+    /// Returns the backend user ID if the user has authenticated, otherwise a persistent device UUID.
     static var currentUserId: String {
-        if let existing = UserDefaults.standard.string(forKey: key) {
+        if let backendId = UserDefaults.standard.string(forKey: backendKey) {
+            return backendId
+        }
+        if let existing = UserDefaults.standard.string(forKey: localKey) {
             return existing
         }
         let new = UUID().uuidString
-        UserDefaults.standard.set(new, forKey: key)
+        UserDefaults.standard.set(new, forKey: localKey)
         return new
+    }
+
+    static func setBackendUserId(_ id: String) {
+        UserDefaults.standard.set(id, forKey: backendKey)
+    }
+
+    static func clearBackendUserId() {
+        UserDefaults.standard.removeObject(forKey: backendKey)
     }
 }
 
@@ -391,14 +404,19 @@ struct APIClient {
         let monthlyBudgetCents: Int
         let startDate: String
         let endDate: String
+        let budgetSource: String?
     }
 
-    /// Mock/백엔드가 배열 `[...]` 또는 객체 `{ "goals": [...] }` 둘 다 허용
+    struct UpdateGoalRequest: Encodable {
+        let title: String?
+        let memo: String?
+        let category: BudgetCategory?
+        let monthlyBudgetCents: Int?
+    }
+
+    /// 배열 `[...]` 또는 객체 `{ "goals": [...] }` 둘 다 허용
     func fetchGoals() async throws -> [BackendGoal] {
-        let request = try makeRequest(
-            path: "goals",
-            method: "GET"
-        )
+        let request = try makeRequest(path: "goals", method: "GET")
         let data = try await sendData(request)
         if let wrapped = try? JSONDecoder().decode(GoalsResponseWrapper.self, from: data) {
             return wrapped.goals
@@ -415,9 +433,10 @@ struct APIClient {
         memo: String?,
         icon: String?,
         category: BudgetCategory,
-        monthlyBudgetCents: Int,
+        monthlyBudgetCents: Int = 0,
         startDate: Date,
-        endDate: Date
+        endDate: Date,
+        budgetSource: String? = "AUTO_AVG_3M"
     ) async throws -> BackendGoal {
         let body = CreateGoalRequest(
             title: title,
@@ -426,14 +445,22 @@ struct APIClient {
             category: category,
             monthlyBudgetCents: monthlyBudgetCents,
             startDate: AppFormatters.apiDate.string(from: startDate),
-            endDate: AppFormatters.apiDate.string(from: endDate)
+            endDate: AppFormatters.apiDate.string(from: endDate),
+            budgetSource: budgetSource
         )
-        let request = try makeRequest(
-            path: "goals",
-            method: "POST",
-            body: body
-        )
+        let request = try makeRequest(path: "goals", method: "POST", body: body)
         return try await send(request, as: BackendGoal.self)
+    }
+
+    func updateGoal(id: String, title: String?, memo: String?, category: BudgetCategory?, monthlyBudgetCents: Int?) async throws {
+        let body = UpdateGoalRequest(title: title, memo: memo, category: category, monthlyBudgetCents: monthlyBudgetCents)
+        let request = try makeRequest(path: "goals/\(id)", method: "PATCH", body: body)
+        _ = try await sendData(request)
+    }
+
+    func deleteGoal(id: String) async throws {
+        let request = try makeRequest(path: "goals/\(id)", method: "DELETE")
+        _ = try await sendData(request)
     }
 
     // MARK: - Plaid
@@ -473,6 +500,27 @@ struct APIClient {
     func fetchDashboard() async throws -> DashboardResponse {
         let request = try makeRequest(path: "dashboard", method: "GET")
         return try await send(request, as: DashboardResponse.self)
+    }
+
+    // MARK: - Auth
+
+    struct GoogleLoginRequest: Encodable {
+        let idToken: String
+    }
+
+    struct GoogleLoginResponse: Decodable {
+        struct UserInfo: Decodable {
+            let id: String
+            let email: String?
+            let nickname: String?
+        }
+        let user: UserInfo
+    }
+
+    func googleLogin(idToken: String) async throws -> GoogleLoginResponse {
+        let body = GoogleLoginRequest(idToken: idToken)
+        let request = try makeRequest(path: "auth/google", method: "POST", body: body)
+        return try await send(request, as: GoogleLoginResponse.self)
     }
 
     // MARK: - FCM Token
