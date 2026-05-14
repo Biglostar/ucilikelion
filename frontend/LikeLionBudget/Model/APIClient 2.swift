@@ -153,6 +153,7 @@ struct APIClient {
             self.overBudget = overBudget
         }
 
+        /// JSON에서 70(정수) 또는 70.0(실수) 둘 다 받기 위함
         private static func decodeDouble(from c: KeyedDecodingContainer<BackendGoal.CodingKeys>, forKey key: BackendGoal.CodingKeys) -> Double? {
             if let i = try? c.decodeIfPresent(Int.self, forKey: key) { return Double(i) }
             return try? c.decodeIfPresent(Double.self, forKey: key)
@@ -234,16 +235,6 @@ struct APIClient {
     struct DashboardCharacter: Codable {
         let status: String
         let bubbleText: String
-    }
-
-    // MARK: - Private Response Wrappers
-
-    private struct CreateTransactionResponse: Decodable {
-        let transaction: BackendTransaction
-    }
-
-    private struct GoalsResponseWrapper: Decodable {
-        let goals: [BackendGoal]
     }
 
     // MARK: - Core request
@@ -351,7 +342,7 @@ struct APIClient {
             method: "POST",
             body: body
         )
-        return try await send(request, as: CreateTransactionResponse.self).transaction
+        return try await send(request, as: BackendTransaction.self)
     }
 
     func updateTransaction(
@@ -402,6 +393,7 @@ struct APIClient {
         let endDate: String
     }
 
+    /// Mock/백엔드가 배열 `[...]` 또는 객체 `{ "goals": [...] }` 둘 다 허용
     func fetchGoals() async throws -> [BackendGoal] {
         let request = try makeRequest(
             path: "goals",
@@ -412,6 +404,10 @@ struct APIClient {
             return wrapped.goals
         }
         return try JSONDecoder().decode([BackendGoal].self, from: data)
+    }
+
+    private struct GoalsResponseWrapper: Decodable {
+        let goals: [BackendGoal]
     }
 
     func createGoal(
@@ -507,3 +503,4 @@ private struct AnyEncodable: Encodable {
 }
 
 private struct EmptyResponse: Decodable {}
+

@@ -234,17 +234,15 @@ struct HomeView: View {
     }
 
     private func loadDashboard() {
-        // 로컬 MockData만 사용. 발표 후 백엔드 연동 시 아래 주석 해제.
-        dashboard = nil
-        /*
-        Task {
-            do {
-                let d = try await APIClient().fetchDashboard()
-                await MainActor.run { dashboard = d }
-            } catch { }
+    Task {
+        do {
+            let d = try await APIClient().fetchDashboard()
+            await MainActor.run { dashboard = d }
+        } catch {
+            print("⚠️ fetchDashboard failed:", error)
         }
-        */
     }
+}
 
     private static func characterLevel(from status: String) -> Int {
         switch status.uppercased() {

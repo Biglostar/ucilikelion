@@ -17,9 +17,7 @@ final class GoalsStore: ObservableObject {
 
     private var _realGoals: [Goal] = []
 
-    // [백엔드 연동] 발표 후 API 사용 시 아래 주석 해제
-    // private let api = APIClient()
-
+    private let api = APIClient()
     private let key = "LikeLionBudget.Goals.v1"
 
     // MARK: - Init
@@ -27,7 +25,23 @@ final class GoalsStore: ObservableObject {
     init() {
         _realGoals = Self.load(key: key) ?? Self.defaultRealGoals
         goals = _realGoals
-        // [백엔드 연동] API에서 목표 불러오기: Task { await loadRemoteGoalsIfNeeded() }
+        Task {
+            do {
+                let now = Date()
+                let endDate = Calendar.current.date(byAdding: .month, value: 1, to: now) ?? now
+                _ = try await api.createGoal(
+                    title: goal.title,
+                    memo: goal.statusText.isEmpty ? nil : goal.statusText,
+                    icon: nil,
+                    category: goal.category,
+                    monthlyBudgetCents: 0,
+                    startDate: now,
+                    endDate: endDate
+                )
+            } catch {
+                print("⚠️ createGoal failed:", error)
+            }
+        }
     }
 
     private func saveRealGoals() {
