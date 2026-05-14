@@ -149,7 +149,7 @@ export async function generateMonthlyReport(userId: string) {
   });
 
   if (!user || user.monthlySummaries.length === 0) {
-    return "분석할 데이터가 없어";
+    return "분석할 데이터가 없습니다";
   }
 
   const summary = user.monthlySummaries[0];
