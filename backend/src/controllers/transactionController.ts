@@ -94,7 +94,14 @@ export async function createTransaction(req: Request, res: Response) {
         data: { userId, title, amountCents, type, category, occurredAt: dateObj, isFixed: isFixed ?? false, note },
     });
 
-    if (type === "INCOME") return { transaction, alert: { shouldNotify: false } };
+    if (type === "INCOME") {
+      await tx.monthlySummary.upsert({
+        where: { userId_year_month: { userId, year, month } },
+        update: { totalIncomeCents: { increment: amountCents } },
+        create: { userId, year, month, totalIncomeCents: amountCents },
+      });
+      return { transaction, alert: { shouldNotify: false } };
+    }
 
       // 3. MonthlySummary 업데이트 (전체 지출 합산)
     const summary = await tx.monthlySummary.upsert({
@@ -157,8 +164,6 @@ const totalCheckpoint = getNaggingCheckpoint(user.lastTotalAlertPct!, totalRemai
         });
       }
 
-
-
       return { 
         transaction, 
         alert: { 
@@ -166,7 +171,7 @@ const totalCheckpoint = getNaggingCheckpoint(user.lastTotalAlertPct!, totalRemai
           message: naggingMessage, 
           characterStatus: newStatus 
         },
-        fcmToken: user.fcmToken // 알림 발송용
+        fcmToken: user.fcmToken 
       };
     }, { timeout: 20000 });
 
@@ -184,6 +189,95 @@ const totalCheckpoint = getNaggingCheckpoint(user.lastTotalAlertPct!, totalRemai
 }
 
 export async function updateTransaction(req: Request, res: Response) {
+  try {
+    const userId = req.header("x-user-id") as string;
+    if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
+
+    const id = req.params.id as string;
+    const { title, amountCents, type, category, occurredAt, isFixed, note } = req.body;
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const existing = await tx.transaction.findFirst({ where: { id, userId } });
+      if (!existing) throw new Error("Transaction not found");
+
+      const newOccurredAt = occurredAt ? new Date(occurredAt) : existing.occurredAt;
+      const newAmountCents = amountCents ?? existing.amountCents;
+      const newType = type ?? existing.type;
+      const newCategory = category ?? existing.category;
+
+      // MonthlySummary: decre old and update new
+      const oldYear = existing.occurredAt.getFullYear();
+      const oldMonth = existing.occurredAt.getMonth() + 1;
+      await tx.monthlySummary.upsert({
+        where: { userId_year_month: { userId, year: oldYear, month: oldMonth } },
+        update: existing.type === "EXPENSE"
+          ? { totalSpentCents: { decrement: existing.amountCents } }
+          : { totalIncomeCents: { decrement: existing.amountCents } },
+        create: { userId, year: oldYear, month: oldMonth },
+      });
+      const newYear = newOccurredAt.getFullYear();
+      const newMonth = newOccurredAt.getMonth() + 1;
+      await tx.monthlySummary.upsert({
+        where: { userId_year_month: { userId, year: newYear, month: newMonth } },
+        update: newType === "EXPENSE"
+          ? { totalSpentCents: { increment: newAmountCents } }
+          : { totalIncomeCents: { increment: newAmountCents } },
+        create: {
+          userId, year: newYear, month: newMonth,
+          totalSpentCents: newType === "EXPENSE" ? newAmountCents : 0,
+          totalIncomeCents: newType === "INCOME" ? newAmountCents : 0,
+        },
+      });
+
+      // Goal: decre old and update new
+      if (existing.type === "EXPENSE") {
+        const oldGoal = await tx.goal.findFirst({
+          where: { userId, category: existing.category, status: "ACTIVE" },
+          orderBy: { isSelected: "desc" },
+        });
+        if (oldGoal) {
+          await tx.goal.update({
+            where: { id: oldGoal.id },
+            data: { currentSpentCents: Math.max(0, oldGoal.currentSpentCents - existing.amountCents) },
+          });
+        }
+      }
+      if (newType === "EXPENSE") {
+        const newGoal = await tx.goal.findFirst({
+          where: { userId, category: newCategory, status: "ACTIVE" },
+          orderBy: { isSelected: "desc" },
+        });
+        if (newGoal) {
+          const freshGoal = await tx.goal.findUnique({ where: { id: newGoal.id } });
+          await tx.goal.update({
+            where: { id: newGoal.id },
+            data: { currentSpentCents: (freshGoal!.currentSpentCents) + newAmountCents },
+          });
+        }
+      }
+
+      return tx.transaction.update({
+        where: { id },
+        data: {
+          ...(title !== undefined && { title }),
+          ...(amountCents !== undefined && { amountCents }),
+          ...(type !== undefined && { type }),
+          ...(category !== undefined && { category }),
+          ...(occurredAt !== undefined && { occurredAt: newOccurredAt }),
+          ...(isFixed !== undefined && { isFixed }),
+          ...(note !== undefined && { note }),
+        },
+      });
+    }, { timeout: 20000 });
+
+    return res.status(200).json(updated);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Failed to update transaction" });
+  }
+}
+
+export async function deleteTransaction(req: Request, res: Response) {
   try {
     const userId = req.header("x-user-id") as string;
     if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
@@ -213,29 +307,12 @@ export async function updateTransaction(req: Request, res: Response) {
       await updateMonthlySummary(userId, existing.occurredAt, amountCents - existing.amountCents);
     }
 
-    return res.json(updated);
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: "Failed to update transaction" });
-  }
-}
-
-export async function deleteTransaction(req: Request, res: Response) {
-  try {
-    const userId = req.header("x-user-id") as string;
-    const id = req.params.id as string;
-
-    if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
-
-    const existing = await prisma.transaction.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ error: "Transaction not found" });
-    if (existing.userId !== userId) return res.status(403).json({ error: "Unauthorized" });
-
-    await prisma.transaction.delete({ where: { id } });
-
-    if (existing.type === "EXPENSE") {
-      await updateMonthlySummary(userId, existing.occurredAt, -existing.amountCents);
-    }
+    await updateMonthlySummary(
+      transaction.userId,
+      transaction.occurredAt,
+      -transaction.amountCents,
+      transaction.type
+    );
 
     return res.status(200).json({ message: "Deleted successfully" });
   } catch (e) {

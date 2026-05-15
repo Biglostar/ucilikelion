@@ -10,6 +10,7 @@ import { generateNaggingMessage } from "./services/aiService";
 import dashboardRoutes from "./routes/dashboardRoutes";
 import plaidRoutes from './routes/plaidRoutes';
 import userRoutes from "./routes/userRoutes";
+import reportRoutes from "./routes/reportRoutes";
 import authRoutes from "./routes/authRoutes";
 
 
@@ -28,6 +29,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/transactions", transactionRoutes);
 
 app.use('/api/plaid', plaidRoutes);
+app.use('/api/reports', reportRoutes);
 app.use('/api/auth', authRoutes);
 
 // Start Server
