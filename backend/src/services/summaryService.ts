@@ -8,27 +8,23 @@ import { sendPushNotification } from "./pushService";
 export async function updateMonthlySummary(
   userId: string,
   date: Date,
-  amountChangeCents: number
+  amountChangeCents: number,
+  type: "EXPENSE" | "INCOME" = "EXPENSE"
 ) {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
 
   return await prisma.monthlySummary.upsert({
-    where: {
-      userId_year_month: {
-        userId,
-        year,
-        month,
-      },
-    },
-    update: {
-      totalSpentCents: { increment: amountChangeCents },
-    },
+    where: { userId_year_month: { userId, year, month } },
+    update: type === "INCOME"
+      ? { totalIncomeCents: { increment: amountChangeCents } }
+      : { totalSpentCents: { increment: amountChangeCents } },
     create: {
       userId,
       year,
       month,
-      totalSpentCents: amountChangeCents > 0 ? amountChangeCents : 0,
+      totalSpentCents: type === "EXPENSE" && amountChangeCents > 0 ? amountChangeCents : 0,
+      totalIncomeCents: type === "INCOME" && amountChangeCents > 0 ? amountChangeCents : 0,
     },
   });
 }
