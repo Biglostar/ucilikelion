@@ -171,7 +171,7 @@ const totalCheckpoint = getNaggingCheckpoint(user.lastTotalAlertPct!, totalRemai
           message: naggingMessage, 
           characterStatus: newStatus 
         },
-        fcmToken: user.fcmToken // 알림 발송용
+        fcmToken: user.fcmToken 
       };
     }, { timeout: 20000 });
 
@@ -205,7 +205,7 @@ export async function updateTransaction(req: Request, res: Response) {
       const newType = type ?? existing.type;
       const newCategory = category ?? existing.category;
 
-      // MonthlySummary: decre old and upodate new
+      // MonthlySummary: decre old and update new
       const oldYear = existing.occurredAt.getFullYear();
       const oldMonth = existing.occurredAt.getMonth() + 1;
       await tx.monthlySummary.upsert({
@@ -229,7 +229,7 @@ export async function updateTransaction(req: Request, res: Response) {
         },
       });
 
-      // Goal
+      // Goal: decre old and update new
       if (existing.type === "EXPENSE") {
         const oldGoal = await tx.goal.findFirst({
           where: { userId, category: existing.category, status: "ACTIVE" },
@@ -248,7 +248,6 @@ export async function updateTransaction(req: Request, res: Response) {
           orderBy: { isSelected: "desc" },
         });
         if (newGoal) {
-          // 같은 goal이면 위 차감이 반영된 최신 값을 다시 읽어야 함
           const freshGoal = await tx.goal.findUnique({ where: { id: newGoal.id } });
           await tx.goal.update({
             where: { id: newGoal.id },
@@ -294,7 +293,6 @@ export async function deleteTransaction(req: Request, res: Response) {
       where: { id } 
     });
 
-    // 삭제된 금액만큼 테이블에서 차감
     await updateMonthlySummary(
       transaction.userId,
       transaction.occurredAt,
