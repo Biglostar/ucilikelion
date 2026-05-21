@@ -308,10 +308,10 @@ export async function deleteTransaction(req: Request, res: Response) {
     }
 
     await updateMonthlySummary(
-      transaction.userId,
-      transaction.occurredAt,
-      -transaction.amountCents,
-      transaction.type
+      existing.userId,
+      existing.occurredAt,
+      -existing.amountCents,
+      existing.type
     );
 
     return res.status(200).json({ message: "Deleted successfully" });
