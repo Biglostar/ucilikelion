@@ -5,6 +5,8 @@ import { CountryCode, Products } from 'plaid';
 import { TransactionType } from '@prisma/client';
 import { mapPlaidCategory } from '../utils/categoryMapper';
 import { updateUserBudgets } from './dashboardController';
+import { determineStatus } from './transactionController';
+import { generateNaggingMessage } from '../services/aiService';
 
 // Dev only
 import { Products as PlaidProducts } from 'plaid';
@@ -109,8 +111,31 @@ export const syncTransactions = async (req: Request, res: Response) => {
         addedCount++;
       }
     }
-    // --- NEW LINE: Instantly recalculate budgets based on new data ---
     await updateUserBudgets(userId);
+
+    // 캐릭터 상태 업데이트
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { totalMonthlyBudgetCents: true, roastLevel: true, characterStatus: true }
+    });
+
+    if (updatedUser && updatedUser.totalMonthlyBudgetCents > 0) {
+      const now2 = new Date();
+      const summary = await prisma.monthlySummary.findUnique({
+        where: { userId_year_month: { userId, year: now2.getFullYear(), month: now2.getMonth() + 1 } }
+      });
+      const totalSpent = summary?.totalSpentCents ?? 0;
+      const totalRemainingPct = ((updatedUser.totalMonthlyBudgetCents - totalSpent) / updatedUser.totalMonthlyBudgetCents) * 100;
+      const newStatus = determineStatus(totalRemainingPct);
+
+      if (newStatus !== updatedUser.characterStatus) {
+        const characterMsg = await generateNaggingMessage("monthly_progress", Math.floor(totalRemainingPct), updatedUser.roastLevel);
+        await prisma.user.update({
+          where: { id: userId },
+          data: { characterStatus: newStatus, characterMessage: characterMsg }
+        });
+      }
+    }
 
     res.json({ success: true, added: addedCount });
   } catch (error) {
