@@ -31,11 +31,8 @@ enum TutorialStep: Int, CaseIterable, Hashable {
 
     case done
 
-    // MARK: - 이미지 이름 (Tutorial 1 ~ Tutorial 15)
-
-    var imageName: String {
-        return "Tutorial \(rawValue + 1)"
-    }
+    // MARK: - 이미지 이름 (Tutorial 1 ~ Tutorial 15) — 스크린샷 방식 비활성화
+    // var imageName: String { "Tutorial \(rawValue + 1)" }
 
     // MARK: - 표시 메시지
 
