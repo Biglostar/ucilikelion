@@ -534,6 +534,11 @@ struct APIClient {
         let request = try makeRequest(path: "users/fcm-token", method: "PATCH", body: body)
         _ = try await sendData(request)
     }
+
+    func deleteAccount() async throws {
+        let request = try makeRequest(path: "users", method: "DELETE")
+        _ = try await sendData(request)
+    }
 }
 
 // MARK: - Private Helpers

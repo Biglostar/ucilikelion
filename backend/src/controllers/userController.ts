@@ -1,6 +1,22 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma";
 
+export async function deleteAccount(req: Request, res: Response) {
+  try {
+    const userId = req.header("x-user-id");
+    if (!userId) return res.status(400).json({ error: "Missing x-user-id" });
+
+    await prisma.monthlySummary.deleteMany({ where: { userId } });
+    await prisma.report.deleteMany({ where: { userId } });
+    await prisma.user.delete({ where: { id: userId } });
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Account deletion error:", error);
+    return res.status(500).json({ error: "Failed to delete account" });
+  }
+}
+
 export async function updateFcmToken(req: Request, res: Response) {
   try {
     const userId = req.header("x-user-id"); 

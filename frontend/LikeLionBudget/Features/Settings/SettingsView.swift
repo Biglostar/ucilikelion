@@ -221,6 +221,8 @@ struct PersonalInfoView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showDeleteConfirm = false
     @State private var showLogoutDoneAlert = false
+    @State private var isDeletingAccount = false
+    @State private var showDeleteErrorAlert = false
 
     private var displayName: String { settings.settings.userDisplayName ?? "—" }
     private var email: String { settings.settings.userEmail ?? "—" }
@@ -305,6 +307,11 @@ struct PersonalInfoView: View {
             .presentationBackground(Color.white)
             .presentationCornerRadius(Theme.sheetCornerRadius)
         }
+        .alert("계정 삭제 실패", isPresented: $showDeleteErrorAlert) {
+            Button("확인") {}
+        } message: {
+            Text("계정 삭제 중 오류가 발생했어요. 다시 시도해주세요.")
+        }
         .alert("로그아웃되었어요", isPresented: $showLogoutDoneAlert) {
             Button("확인") {
                 showLogoutDoneAlert = false
@@ -355,9 +362,30 @@ struct PersonalInfoView: View {
     }
 
     private func performAccountDeletion() {
-        // 계정 탈퇴 API 연동 시 여기서 처리
-        showDeleteConfirm = false
-        dismiss()
+        isDeletingAccount = true
+        Task {
+            do {
+                try await APIClient().deleteAccount()
+                await MainActor.run {
+                    UserIdentity.clearBackendUserId()
+                    settings.settings = AppSettings(
+                        privacyLowMode: true,
+                        notificationsEnabled: true,
+                        naggingLevel: .medium,
+                        plaidConnected: false,
+                        hasAcceptedTerms: false,
+                        hasCompletedTermsAndPlaidOnce: false
+                    )
+                    isDeletingAccount = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isDeletingAccount = false
+                    showDeleteErrorAlert = true
+                }
+            }
+        }
     }
 }
 
