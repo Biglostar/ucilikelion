@@ -72,9 +72,9 @@ struct ReportView: View {
                             }
                             // 튜토리얼 monthlyReport 프레임 등록
                             .background(GeometryReader { bg in
-                                Color.clear.onAppear {
-                                    tutorialStore.registerFrame(bg.frame(in: .global), for: .monthlyReport)
-                                }
+                                Color.clear
+                                    .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .monthlyReport) }
+                                    .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .monthlyReport) }
                             })
 
                             DisclosureCard(
@@ -86,9 +86,9 @@ struct ReportView: View {
                             }
                             // 튜토리얼 fixedCosts 프레임 등록
                             .background(GeometryReader { bg in
-                                Color.clear.onAppear {
-                                    tutorialStore.registerFrame(bg.frame(in: .global), for: .fixedCosts)
-                                }
+                                Color.clear
+                                    .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .fixedCosts) }
+                                    .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .fixedCosts) }
                             })
                         }
                     }

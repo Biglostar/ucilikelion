@@ -105,18 +105,18 @@ struct HomeView: View {
                 }
                 // 튜토리얼 goalProgress 프레임 등록
                 .background(GeometryReader { bg in
-                    Color.clear.onAppear {
-                        tutorialStore.registerFrame(bg.frame(in: .global), for: .goalProgress)
-                    }
+                    Color.clear
+                        .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .goalProgress) }
+                        .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .goalProgress) }
                 })
 
                 MonthCalendarView(month: $month, store: store, selectedDay: $selectedDayForSheet)
                     .padding(.vertical, Theme.Home.calendarVerticalPadding)
                     // 튜토리얼 calendar 프레임 등록
                     .background(GeometryReader { bg in
-                        Color.clear.onAppear {
-                            tutorialStore.registerFrame(bg.frame(in: .global), for: .calendar)
-                        }
+                        Color.clear
+                            .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .calendar) }
+                            .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .calendar) }
                     })
             }
             .padding(.horizontal, Theme.Home.goalCalendarHorizontal)
@@ -159,9 +159,9 @@ struct HomeView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             // 튜토리얼 speechBubble 프레임 등록
                             .background(GeometryReader { bg in
-                                Color.clear.onAppear {
-                                    tutorialStore.registerFrame(bg.frame(in: .global), for: .speechBubble)
-                                }
+                                Color.clear
+                                    .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .speechBubble) }
+                                    .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .speechBubble) }
                             })
                             .position(x: w * CGFloat(layout.bubbleX), y: imageH * CGFloat(layout.bubbleY))
 
@@ -173,9 +173,9 @@ struct HomeView: View {
                 .clipped()
                 // 튜토리얼 character 프레임 등록
                 .background(GeometryReader { bg in
-                    Color.clear.onAppear {
-                        tutorialStore.registerFrame(bg.frame(in: .global), for: .character)
-                    }
+                    Color.clear
+                        .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .character) }
+                        .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .character) }
                 })
 
                 SpendMonthOnlyView(monthAmount: totalSpendTextThisMonth())
@@ -183,9 +183,9 @@ struct HomeView: View {
                     .background(Theme.beige)
                     // 튜토리얼 spendAmount 프레임 등록
                     .background(GeometryReader { bg in
-                        Color.clear.onAppear {
-                            tutorialStore.registerFrame(bg.frame(in: .global), for: .spendAmount)
-                        }
+                        Color.clear
+                            .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .spendAmount) }
+                            .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .spendAmount) }
                     })
             }
             .coordinateSpace(name: "homeHeaderGlobal")

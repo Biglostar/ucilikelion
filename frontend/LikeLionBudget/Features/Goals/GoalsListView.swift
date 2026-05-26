@@ -37,18 +37,18 @@ struct GoalsListView: View {
                                     )
                                     // 튜토리얼 goalToggle 프레임: 첫 번째 목표 행에 등록
                                     .background(index == 0 ? GeometryReader { bg in
-                                        Color.clear.onAppear {
-                                            tutorialStore.registerFrame(bg.frame(in: .global), for: .goalToggle)
-                                        }
+                                        Color.clear
+                                            .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .goalToggle) }
+                                            .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .goalToggle) }
                                     } : nil)
                                 }
                             }
                             .llContainer()
                             // 튜토리얼 goalsList 프레임 등록
                             .background(GeometryReader { bg in
-                                Color.clear.onAppear {
-                                    tutorialStore.registerFrame(bg.frame(in: .global), for: .goalsList)
-                                }
+                                Color.clear
+                                    .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .goalsList) }
+                                    .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .goalsList) }
                             })
                         }
 
@@ -65,9 +65,9 @@ struct GoalsListView: View {
                         }
                         // 튜토리얼 addGoal 프레임 등록
                         .background(GeometryReader { bg in
-                            Color.clear.onAppear {
-                                tutorialStore.registerFrame(bg.frame(in: .global), for: .addGoal)
-                            }
+                            Color.clear
+                                .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .addGoal) }
+                                .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .addGoal) }
                         })
                     }
                     .padding(.horizontal, Theme.screenHorizontal)
