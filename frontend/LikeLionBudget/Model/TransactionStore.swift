@@ -145,6 +145,10 @@ final class TransactionStore: ObservableObject {
 
     // MARK: - Remote Load
 
+    func reload() {
+        Task { await loadRemoteTransactions() }
+    }
+
     private func loadRemoteTransactions() async {
         do {
             let backendItems = try await api.fetchTransactions()

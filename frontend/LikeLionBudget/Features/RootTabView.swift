@@ -64,5 +64,12 @@ struct RootTabView: View {
         .onChange(of: tutorialStore.isActive) { _, active in
             goalsStore.isTutorialMode = active
         }
+        .onChange(of: settingsStore.settings.userEmail) { _, email in
+            // 로그인 완료 시 올바른 userId로 데이터 재로드
+            if email != nil {
+                Task { await goalsStore.reloadFromServer() }
+                transactionStore.reload()
+            }
+        }
     }
 }

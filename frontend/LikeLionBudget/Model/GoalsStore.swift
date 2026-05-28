@@ -38,6 +38,10 @@ final class GoalsStore: ObservableObject {
         Task { await loadRemoteGoals() }
     }
 
+    func reloadFromServer() async {
+        await loadRemoteGoals()
+    }
+
     // MARK: - Public Access
 
     var selectedGoals: [Goal] {

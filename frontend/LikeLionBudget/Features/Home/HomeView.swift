@@ -12,6 +12,7 @@ struct HomeView: View {
     @ObservedObject var store: TransactionStore
     @ObservedObject var goalsStore: GoalsStore
     @EnvironmentObject var tutorialStore: TutorialStore
+    @EnvironmentObject var settingsStore: SettingsStore
     var aiSpeechMent: String? = nil
     var characterSpendingLevel: Int? = nil
 
@@ -62,6 +63,10 @@ struct HomeView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .plaidDidSync)) { _ in
             loadDashboard()
+        }
+        .onChange(of: settingsStore.settings.userEmail) { _, email in
+            // 로그인 완료 시 올바른 userId로 dashboard 재로드
+            if email != nil { loadDashboard() }
         }
         .sheet(item: $selectedDayForSheet) { item in
             DayDetailSheetContainer(date: item.date, store: store)
