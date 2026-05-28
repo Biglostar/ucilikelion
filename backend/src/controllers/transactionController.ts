@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma";
 import { generateNaggingMessage, generatePushNotification } from "../services/aiService";
-import { updateMonthlySummary } from "../services/summaryService";
 import { sendPushNotification } from "../services/pushService";
 /**
  * 전체 잔여 예산 비율에 따라 캐릭터의 경제적 상태를 결정합니다.
@@ -283,39 +282,43 @@ export async function deleteTransaction(req: Request, res: Response) {
     if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
 
     const id = req.params.id as string;
-    const { title, amountCents, type, category, occurredAt, isFixed, note } = req.body;
 
-    const existing = await prisma.transaction.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ error: "Transaction not found" });
-    if (existing.userId !== userId) return res.status(403).json({ error: "Unauthorized" });
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.transaction.findUnique({ where: { id } });
+      if (!existing) throw Object.assign(new Error("Transaction not found"), { status: 404 });
+      if (existing.userId !== userId) throw Object.assign(new Error("Unauthorized"), { status: 403 });
 
-    const updated = await prisma.transaction.update({
-      where: { id },
-      data: {
-        ...(title !== undefined && { title: String(title) }),
-        ...(amountCents !== undefined && { amountCents: Number(amountCents) }),
-        ...(type !== undefined && { type: type as "INCOME" | "EXPENSE" }),
-        ...(category !== undefined && { category: String(category) }),
-        ...(occurredAt !== undefined && { occurredAt: new Date(occurredAt as string) }),
-        ...(isFixed !== undefined && { isFixed: Boolean(isFixed) }),
-        ...(note !== undefined && { note: note as string | null }),
+      await tx.transaction.delete({ where: { id } });
+
+      const year = existing.occurredAt.getFullYear();
+      const month = existing.occurredAt.getMonth() + 1;
+
+      await tx.monthlySummary.upsert({
+        where: { userId_year_month: { userId, year, month } },
+        update: existing.type === "EXPENSE"
+          ? { totalSpentCents: { decrement: existing.amountCents } }
+          : { totalIncomeCents: { decrement: existing.amountCents } },
+        create: { userId, year, month },
+      });
+
+      if (existing.type === "EXPENSE") {
+        const goal = await tx.goal.findFirst({
+          where: { userId, category: existing.category, status: "ACTIVE" },
+          orderBy: { isSelected: "desc" },
+        });
+        if (goal) {
+          await tx.goal.update({
+            where: { id: goal.id },
+            data: { currentSpentCents: Math.max(0, goal.currentSpentCents - existing.amountCents) },
+          });
+        }
       }
-    });
-
-    // Sync monthly summary delta when expense amount changes
-    if (existing.type === "EXPENSE" && amountCents !== undefined && existing.amountCents !== amountCents) {
-      await updateMonthlySummary(userId, existing.occurredAt, amountCents - existing.amountCents);
-    }
-
-    await updateMonthlySummary(
-      transaction.userId,
-      transaction.occurredAt,
-      -transaction.amountCents,
-      transaction.type
-    );
+    }, { timeout: 20000 });
 
     return res.status(200).json({ message: "Deleted successfully" });
-  } catch (e) {
+  } catch (e: any) {
+    if (e.status === 404) return res.status(404).json({ error: "Transaction not found" });
+    if (e.status === 403) return res.status(403).json({ error: "Unauthorized" });
     console.error(e);
     return res.status(500).json({ error: "Failed to delete transaction" });
   }
