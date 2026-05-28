@@ -47,7 +47,11 @@ struct ContentView: View {
                 } else {
                     // 재방문: 튜토리얼 미완료 시에만 시작
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        #if DEBUG
+                        tutorialStore.forceStart()
+                        #else
                         tutorialStore.startIfNeeded()
+                        #endif
                     }
                 }
             }
@@ -56,6 +60,20 @@ struct ContentView: View {
             if requested {
                 showLoginSheet = true
                 settingsStore.requestShowLogin = false
+            }
+        }
+        .onChange(of: settingsStore.didDeleteAccount) { _, deleted in
+            guard deleted else { return }
+            settingsStore.didDeleteAccount = false
+            showLoginSheet = false
+            showTermsSheet = false
+            showPlaidSheet = false
+            withAnimation(.easeInOut(duration: 0.4)) { showSplash = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                withAnimation(.easeInOut(duration: 0.5)) { showSplash = false }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showTermsSheet = true
+                }
             }
         }
         .sheet(isPresented: $showLoginSheet) {

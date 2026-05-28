@@ -36,19 +36,31 @@ struct HomeView: View {
         ZStack {
             Theme.beige.ignoresSafeArea()
 
-            ScrollView {
-                homeScrollContent
+            ScrollViewReader { proxy in
+                ScrollView {
+                    homeScrollContent
+                }
+                .onChange(of: tutorialStore.currentStep) { _, step in
+                    if step == .calendar || step == .dayDetail {
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            proxy.scrollTo("calendarAnchor", anchor: .center)
+                        }
+                        // 스크롤 후 프레임 재등록
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            tutorialStore.refreshFrames()
+                        }
+                    }
+                }
             }
 
-            // 튜토리얼 오버레이 (홈 탭 단계에서만 표시)
-            if tutorialStore.isActive && tutorialStore.currentStep.requiredTab == 0 {
-                TutorialOverlayView(store: tutorialStore)
-            }
         }
         .onAppear {
             if selectedGoalID == nil {
                 selectedGoalID = goalsStore.selectedGoals.first?.id
             }
+            loadDashboard()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .plaidDidSync)) { _ in
             loadDashboard()
         }
         .sheet(item: $selectedDayForSheet) { item in
@@ -108,15 +120,18 @@ struct HomeView: View {
                     Color.clear
                         .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .goalProgress) }
                         .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .goalProgress) }
+                            .onChange(of: tutorialStore.frameRefreshToken) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .goalProgress) }
                 })
 
                 MonthCalendarView(month: $month, store: store, selectedDay: $selectedDayForSheet)
                     .padding(.vertical, Theme.Home.calendarVerticalPadding)
+                    .id("calendarAnchor")
                     // 튜토리얼 calendar 프레임 등록
                     .background(GeometryReader { bg in
                         Color.clear
                             .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .calendar) }
                             .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .calendar) }
+                                .onChange(of: tutorialStore.frameRefreshToken) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .calendar) }
                     })
             }
             .padding(.horizontal, Theme.Home.goalCalendarHorizontal)
@@ -162,6 +177,7 @@ struct HomeView: View {
                                 Color.clear
                                     .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .speechBubble) }
                                     .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .speechBubble) }
+                                    .onChange(of: tutorialStore.frameRefreshToken) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .speechBubble) }
                             })
                             .position(x: w * CGFloat(layout.bubbleX), y: imageH * CGFloat(layout.bubbleY))
 
@@ -176,6 +192,7 @@ struct HomeView: View {
                     Color.clear
                         .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .character) }
                         .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .character) }
+                        .onChange(of: tutorialStore.frameRefreshToken) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .character) }
                 })
 
                 SpendMonthOnlyView(monthAmount: totalSpendTextThisMonth())
@@ -186,6 +203,7 @@ struct HomeView: View {
                         Color.clear
                             .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .spendAmount) }
                             .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .spendAmount) }
+                                .onChange(of: tutorialStore.frameRefreshToken) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .spendAmount) }
                     })
             }
             .coordinateSpace(name: "homeHeaderGlobal")
@@ -234,16 +252,14 @@ struct HomeView: View {
     }
 
     private func loadDashboard() {
-        // 로컬 MockData만 사용. 발표 후 백엔드 연동 시 아래 주석 해제.
-        dashboard = nil
-        /*
         Task {
             do {
                 let d = try await APIClient().fetchDashboard()
                 await MainActor.run { dashboard = d }
-            } catch { }
+            } catch {
+                await MainActor.run { dashboard = nil }
+            }
         }
-        */
     }
 
     private static func characterLevel(from status: String) -> Int {

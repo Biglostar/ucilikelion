@@ -59,23 +59,24 @@ struct ReportView: View {
     var body: some View {
         ZStack {
             NavigationStack {
-                ScrollView {
-                    VStack(spacing: Theme.spacingStandard) {
-
-                    VStack(spacing: Theme.spacingLarge) {
-                        DisclosureCard(
-                                title: "월간 리포트",
-                                subtitle: monthlyHeaderSubtitle(for: selectedMonth),
-                                isExpanded: $isMonthlyExpanded
-                            ) {
-                                MonthlyReportExpanded(store: store, selectedMonth: $selectedMonth)
-                            }
-                            // 튜토리얼 monthlyReport 프레임 등록
-                            .background(GeometryReader { bg in
-                                Color.clear
-                                    .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .monthlyReport) }
-                                    .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .monthlyReport) }
-                            })
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: Theme.spacingStandard) {
+                        VStack(spacing: Theme.spacingLarge) {
+                            DisclosureCard(
+                                    title: "월간 리포트",
+                                    subtitle: monthlyHeaderSubtitle(for: selectedMonth),
+                                    isExpanded: $isMonthlyExpanded
+                                ) {
+                                    MonthlyReportExpanded(store: store, selectedMonth: $selectedMonth)
+                                }
+                                // 튜토리얼 monthlyReport 프레임 등록
+                                .background(GeometryReader { bg in
+                                    Color.clear
+                                        .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .monthlyReport) }
+                                        .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .monthlyReport) }
+                                        .onChange(of: tutorialStore.frameRefreshToken) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .monthlyReport) }
+                                })
 
                             DisclosureCard(
                                 title: "고정지출",
@@ -84,17 +85,40 @@ struct ReportView: View {
                             ) {
                                 FixedCostsExpanded(groups: detectedFixedGroups, expandAll: false)
                             }
+                            .id("fixedCostsAnchor")
                             // 튜토리얼 fixedCosts 프레임 등록
                             .background(GeometryReader { bg in
                                 Color.clear
                                     .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .fixedCosts) }
                                     .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .fixedCosts) }
+                                    .onChange(of: tutorialStore.frameRefreshToken) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .fixedCosts) }
+                                    .onChange(of: isFixedExpanded) { _, _ in
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                            tutorialStore.registerFrame(bg.frame(in: .global), for: .fixedCosts)
+                                        }
+                                    }
                             })
+                            }
+                        }
+                        .padding(.horizontal, Theme.screenHorizontal)
+                        .padding(.top, Theme.screenTop + Theme.screenTopNavExtra)
+                        .padding(.bottom, Theme.screenBottom)
+                    }
+                    .onChange(of: tutorialStore.shouldExpandFixedCosts) { _, should in
+                        guard should else { return }
+                        tutorialStore.shouldExpandFixedCosts = false
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                            isFixedExpanded = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                proxy.scrollTo("fixedCostsAnchor", anchor: .center)
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                                tutorialStore.refreshFrames()
+                            }
                         }
                     }
-                    .padding(.horizontal, Theme.screenHorizontal)
-                    .padding(.top, Theme.screenTop + Theme.screenTopNavExtra)
-                    .padding(.bottom, Theme.screenBottom)
                 }
                 .background(Color.white)
                 .toolbar {
@@ -106,10 +130,6 @@ struct ReportView: View {
                 }
             }
 
-            // 튜토리얼 오버레이 (리포트 탭 단계에서만 표시)
-            if tutorialStore.isActive && tutorialStore.currentStep.requiredTab == 2 {
-                TutorialOverlayView(store: tutorialStore)
-            }
         }
         // 튜토리얼: monthlyReport 단계 → 카드 자동 펼치기
         .onChange(of: tutorialStore.shouldExpandMonthlyReport) { _, should in
@@ -117,14 +137,6 @@ struct ReportView: View {
             tutorialStore.shouldExpandMonthlyReport = false
             withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
                 isMonthlyExpanded = true
-            }
-        }
-        // 튜토리얼: fixedCosts 단계 → 카드 자동 펼치기
-        .onChange(of: tutorialStore.shouldExpandFixedCosts) { _, should in
-            guard should else { return }
-            tutorialStore.shouldExpandFixedCosts = false
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                isFixedExpanded = true
             }
         }
     }

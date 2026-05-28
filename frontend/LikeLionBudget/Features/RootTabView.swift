@@ -16,40 +16,53 @@ struct RootTabView: View {
     @State private var selectedTab: Int = 0
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            HomeView(store: transactionStore, goalsStore: goalsStore)
-                .tabItem {
-                    Image(systemName: "house.fill")
-                    Text("홈")
-                }
-                .tag(0)
+        ZStack {
+            TabView(selection: $selectedTab) {
+                HomeView(store: transactionStore, goalsStore: goalsStore)
+                    .tabItem {
+                        Image(systemName: "house.fill")
+                        Text("홈")
+                    }
+                    .tag(0)
 
-            GoalsListView(goalsStore: goalsStore)
-                .tabItem {
-                    Image(systemName: "checklist")
-                    Text("목표")
-                }
-                .tag(1)
+                GoalsListView(goalsStore: goalsStore)
+                    .tabItem {
+                        Image(systemName: "checklist")
+                        Text("목표")
+                    }
+                    .tag(1)
 
-            ReportView(store: transactionStore)
-                .tabItem {
-                    Image(systemName: "book.closed")
-                    Text("리포트")
-                }
-                .tag(2)
+                ReportView(store: transactionStore)
+                    .tabItem {
+                        Image(systemName: "book.closed")
+                        Text("리포트")
+                    }
+                    .tag(2)
 
-            SettingsView(settings: settingsStore)
-                .tabItem {
-                    Image(systemName: "gearshape")
-                    Text("설정")
-                }
-                .tag(3)
+                SettingsView(settings: settingsStore)
+                    .tabItem {
+                        Image(systemName: "gearshape")
+                        Text("설정")
+                    }
+                    .tag(3)
+            }
+            .tint(Theme.rose)
+
+            // 튜토리얼 오버레이 — 최상위에서 전체 화면 덮기
+            if tutorialStore.isActive {
+                TutorialOverlayView(store: tutorialStore)
+                    .ignoresSafeArea()
+            }
         }
-        .tint(Theme.rose)
-        // 튜토리얼 단계에 맞춰 탭 자동 전환
         .onChange(of: tutorialStore.currentStep) { _, step in
             guard tutorialStore.isActive else { return }
             withAnimation { selectedTab = step.requiredTab }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                tutorialStore.refreshFrames()
+            }
+        }
+        .onChange(of: tutorialStore.isActive) { _, active in
+            goalsStore.isTutorialMode = active
         }
     }
 }

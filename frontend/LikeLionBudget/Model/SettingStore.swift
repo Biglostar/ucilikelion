@@ -105,8 +105,8 @@ final class SettingsStore: ObservableObject {
         didSet { save() }
     }
 
-    /// 설정 등에서 로그인 시트를 띄울 때만 `true`로 설정 (로그아웃 직후 자동 표시 없음)
     @Published var requestShowLogin: Bool = false
+    @Published var didDeleteAccount: Bool = false
 
     private let key = "LikeLionBudget.AppSettings.v1"
 

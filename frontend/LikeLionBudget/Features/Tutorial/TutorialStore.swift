@@ -20,6 +20,7 @@ final class TutorialStore: ObservableObject {
     // 각 뷰가 onAppear 시 자신의 글로벌 프레임을 등록
 
     @Published var frames: [TutorialStep: CGRect] = [:]
+    @Published var frameRefreshToken: Int = 0
 
     // MARK: - 시트 / 확장 트리거
     // HomeView 가 관찰: DayDetailSheet 자동 오픈
@@ -49,6 +50,15 @@ final class TutorialStore: ObservableObject {
     func startIfNeeded() {
         guard !hasCompleted else { return }
         start()
+    }
+
+    func forceStart() {
+        hasCompleted = false
+        start()
+    }
+
+    func refreshFrames() {
+        frameRefreshToken += 1
     }
 
     func start() {
@@ -104,11 +114,10 @@ final class TutorialStore: ObservableObject {
         case .dayDetail:
             shouldOpenDayDetail = true
         case .addTransaction:
-            shouldOpenAddTransaction = true
+            break  // DayDetailSheet 안에서 callout만 표시
         case .editTransaction:
-            shouldOpenEditTransaction = true
+            break  // DayDetailSheet 안에서 spotlight만 표시
         case .goalsList:
-            // DayDetailSheet 및 HomeView 시트 닫기 → RootTabView가 탭 전환
             shouldDismissHomeSheet = true
         case .monthlyReport:
             shouldExpandMonthlyReport = true

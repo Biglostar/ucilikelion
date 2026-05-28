@@ -40,6 +40,7 @@ struct GoalsListView: View {
                                         Color.clear
                                             .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .goalToggle) }
                                             .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .goalToggle) }
+                                            .onChange(of: tutorialStore.frameRefreshToken) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .goalToggle) }
                                     } : nil)
                                 }
                             }
@@ -49,6 +50,7 @@ struct GoalsListView: View {
                                 Color.clear
                                     .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .goalsList) }
                                     .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .goalsList) }
+                                    .onChange(of: tutorialStore.frameRefreshToken) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .goalsList) }
                             })
                         }
 
@@ -68,6 +70,7 @@ struct GoalsListView: View {
                             Color.clear
                                 .onAppear { tutorialStore.registerFrame(bg.frame(in: .global), for: .addGoal) }
                                 .onChange(of: tutorialStore.isActive) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .addGoal) }
+                                .onChange(of: tutorialStore.frameRefreshToken) { _, _ in tutorialStore.registerFrame(bg.frame(in: .global), for: .addGoal) }
                         })
                     }
                     .padding(.horizontal, Theme.screenHorizontal)
@@ -94,10 +97,6 @@ struct GoalsListView: View {
                 }
             }
 
-            // 튜토리얼 오버레이 (목표 탭 단계에서만 표시)
-            if tutorialStore.isActive && tutorialStore.currentStep.requiredTab == 1 {
-                TutorialOverlayView(store: tutorialStore)
-            }
         }
     }
 

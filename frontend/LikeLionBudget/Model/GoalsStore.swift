@@ -18,6 +18,17 @@ final class GoalsStore: ObservableObject {
     private let api = APIClient()
     private let key = "LikeLionBudget.Goals.v1"
 
+    static let tutorialMockGoals: [Goal] = [
+        Goal(title: "생활비 줄이기", type: .reduceSpending, isSelected: true, isNotificationsOn: true,
+             statusText: "", category: .food, monthlyBudgetCents: 30000, spentPct: 45, remainingPct: 55, overBudget: false),
+        Goal(title: "카페 아끼기", type: .reduceSpending, isSelected: true, isNotificationsOn: true,
+             statusText: "", category: .cafe, monthlyBudgetCents: 10000, spentPct: 70, remainingPct: 30, overBudget: false)
+    ]
+
+    var isTutorialMode: Bool = false {
+        didSet { goals = isTutorialMode ? Self.tutorialMockGoals : _realGoals }
+    }
+
     // MARK: - Init
 
     init() {
@@ -156,7 +167,7 @@ final class GoalsStore: ObservableObject {
                 )
             }
             _realGoals = mapped
-            goals = mapped
+            if !isTutorialMode { goals = mapped }
             saveRealGoals()
         } catch {
             print("⚠️ fetchGoals API failed:", error)

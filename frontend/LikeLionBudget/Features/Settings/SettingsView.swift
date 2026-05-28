@@ -368,6 +368,7 @@ struct PersonalInfoView: View {
                 try await APIClient().deleteAccount()
                 await MainActor.run {
                     UserIdentity.clearBackendUserId()
+                    UserDefaults.standard.removeObject(forKey: "tutorial_hasCompleted_v1")
                     settings.settings = AppSettings(
                         privacyLowMode: true,
                         notificationsEnabled: true,
@@ -377,6 +378,7 @@ struct PersonalInfoView: View {
                         hasCompletedTermsAndPlaidOnce: false
                     )
                     isDeletingAccount = false
+                    settings.didDeleteAccount = true
                     dismiss()
                 }
             } catch {

@@ -67,10 +67,10 @@ export const syncTransactions = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Bank account not linked" });
     }
 
-    // Fetch last 30 days
+    // Fetch last 90 days
     const now = new Date();
     const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(now.getDate() - 30);
+    thirtyDaysAgo.setDate(now.getDate() - 90);
 
     const response = await plaidClient.transactionsGet({
       access_token: user.plaidAccessToken,
