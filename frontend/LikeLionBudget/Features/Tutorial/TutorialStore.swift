@@ -52,11 +52,6 @@ final class TutorialStore: ObservableObject {
         start()
     }
 
-    func forceStart() {
-        hasCompleted = false
-        start()
-    }
-
     func refreshFrames() {
         frameRefreshToken += 1
     }

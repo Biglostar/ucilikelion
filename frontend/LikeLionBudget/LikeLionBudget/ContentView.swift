@@ -41,17 +41,13 @@ struct ContentView: View {
                 }
                 // 최초 1회만: 약관 → 로그인 → (미연결 시) Plaid → 튜토리얼
                 if !settingsStore.settings.hasAcceptedTerms {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                         showTermsSheet = true
                     }
                 } else {
                     // 재방문: 튜토리얼 미완료 시에만 시작
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                        #if DEBUG
-                        tutorialStore.forceStart()
-                        #else
                         tutorialStore.startIfNeeded()
-                        #endif
                     }
                 }
             }
