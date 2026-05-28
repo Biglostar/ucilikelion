@@ -97,22 +97,15 @@ export const syncTransactions = async (req: Request, res: Response) => {
     let addedCount = 0;
 
     for (const pt of transactions) {
-      // Prevent duplicates using the unique Plaid ID
-      const existing = await prisma.transaction.findUnique({
-        where: { plaidTxnId: pt.transaction_id }
-      });
+      const isExpense = pt.amount > 0;
+      const type = isExpense ? TransactionType.EXPENSE : TransactionType.INCOME;
+      const plaidDetailedCategory = pt.personal_finance_category?.detailed;
+      const amountCents = Math.round(Math.abs(pt.amount) * 100);
 
-      if (!existing) {
-        // Plaid amounts: Positive = Expense, Negative = Income
-        const isExpense = pt.amount > 0;
-        const type = isExpense ? TransactionType.EXPENSE : TransactionType.INCOME;
-        const plaidDetailedCategory = pt.personal_finance_category?.detailed;
-        
-        // Convert to cents (e.g., $5.50 -> 550)
-        const amountCents = Math.round(Math.abs(pt.amount) * 100);
-
-        await prisma.transaction.create({
-          data: {
+      const result = await prisma.transaction.upsert({
+        where: { plaidTxnId: pt.transaction_id },
+        update: {},  // 이미 있으면 업데이트 안 함
+        create: {
             userId: userId,
             plaidTxnId: pt.transaction_id,
             accountId: pt.account_id,
@@ -123,8 +116,7 @@ export const syncTransactions = async (req: Request, res: Response) => {
             occurredAt: new Date(pt.date),
           }
         });
-        addedCount++;
-      }
+      if (result.plaidTxnId) addedCount++;
     }
     await updateUserBudgets(userId);
 
@@ -170,11 +162,10 @@ export const resetAndSyncTransactions = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Bank account not linked" });
     }
 
-    // Plaid에서 온 거래내역만 삭제 (plaidTxnId 있는 것)
-    const deleted = await prisma.transaction.deleteMany({
-      where: { userId, plaidTxnId: { not: null } }
-    });
-    console.log(`[Reset Sync] Deleted ${deleted.count} Plaid transactions for ${userId}`);
+    // 모든 거래내역 삭제 (sandbox + 수동 입력 포함 전체 초기화)
+    const deleted = await prisma.transaction.deleteMany({ where: { userId } });
+    await prisma.monthlySummary.deleteMany({ where: { userId } });
+    console.log(`[Reset Sync] Deleted ${deleted.count} transactions for ${userId}`);
 
     // 재동기화 요청을 기존 sync로 위임
     req.headers['x-user-id'] = userId;
