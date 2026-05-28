@@ -60,6 +60,9 @@ export const exchangePublicToken = async (req: Request, res: Response) => {
 export const syncTransactions = async (req: Request, res: Response) => {
   try {
     const userId = req.headers['x-user-id'] as string;
+    if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
+
+    console.log(`[Plaid Sync] userId: ${userId}`);
 
     // Get the user's saved Plaid token
     const user = await prisma.user.findUnique({ where: { id: userId } });
