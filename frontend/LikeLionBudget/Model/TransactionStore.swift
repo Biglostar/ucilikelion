@@ -164,11 +164,12 @@ final class TransactionStore: ObservableObject {
             transactions = _realTransactions
         } catch {
             print("⚠️ fetchTransactions API failed:", error)
-            // Fallback to mock data so the UI isn't empty during development
+            #if DEBUG
             if _realTransactions.isEmpty {
                 _realTransactions = MockData.realModeTransactionList()
                 transactions = _realTransactions
             }
+            #endif
         }
     }
 

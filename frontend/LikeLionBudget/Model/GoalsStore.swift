@@ -171,6 +171,9 @@ final class GoalsStore: ObservableObject {
             saveRealGoals()
         } catch {
             print("⚠️ fetchGoals API failed:", error)
+            // API 실패 시 로컬 캐시도 신뢰하지 않음 — 빈 목록 표시
+            _realGoals = []
+            if !isTutorialMode { goals = [] }
         }
     }
 

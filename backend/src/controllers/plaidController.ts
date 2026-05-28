@@ -67,14 +67,22 @@ export const syncTransactions = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Bank account not linked" });
     }
 
+    // Production Plaid: refresh 먼저 요청 후 fetch
+    try {
+      await plaidClient.transactionsRefresh({ access_token: user.plaidAccessToken });
+    } catch (e) {
+      // refresh 실패해도 계속 진행 (이미 준비됐을 수 있음)
+      console.log("transactionsRefresh skipped:", (e as any)?.response?.data?.error_code);
+    }
+
     // Fetch last 90 days
     const now = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(now.getDate() - 90);
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(now.getDate() - 90);
 
     const response = await plaidClient.transactionsGet({
       access_token: user.plaidAccessToken,
-      start_date: thirtyDaysAgo.toISOString().split('T')[0],
+      start_date: ninetyDaysAgo.toISOString().split('T')[0],
       end_date: now.toISOString().split('T')[0],
     });
 
