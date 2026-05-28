@@ -71,14 +71,17 @@ export const syncTransactions = async (req: Request, res: Response) => {
     }
 
     // Production Plaid: refresh 먼저 요청 후 fetch
+    console.log(`[Plaid Sync] Calling transactionsRefresh...`);
     try {
       await plaidClient.transactionsRefresh({ access_token: user.plaidAccessToken });
+      console.log(`[Plaid Sync] transactionsRefresh done`);
     } catch (e) {
-      // refresh 실패해도 계속 진행 (이미 준비됐을 수 있음)
-      console.log("transactionsRefresh skipped:", (e as any)?.response?.data?.error_code);
+      const code = (e as any)?.response?.data?.error_code;
+      console.log(`[Plaid Sync] transactionsRefresh skipped: ${code}`);
     }
 
     // Fetch last 90 days
+    console.log(`[Plaid Sync] Calling transactionsGet...`);
     const now = new Date();
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(now.getDate() - 90);
@@ -88,6 +91,7 @@ export const syncTransactions = async (req: Request, res: Response) => {
       start_date: ninetyDaysAgo.toISOString().split('T')[0],
       end_date: now.toISOString().split('T')[0],
     });
+    console.log(`[Plaid Sync] Got ${response.data.transactions.length} transactions`);
 
     const transactions = response.data.transactions;
     let addedCount = 0;
