@@ -90,7 +90,7 @@ struct SettingsView: View {
 
             NaggingLevelChips(selected: Binding(
                 get: { settings.settings.naggingLevel },
-                set: { settings.settings.naggingLevel = $0 }
+                set: { settings.setNaggingLevel($0) }
             ))
 
             naggingExampleBox

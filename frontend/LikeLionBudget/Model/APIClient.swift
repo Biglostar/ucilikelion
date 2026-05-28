@@ -534,6 +534,24 @@ struct APIClient {
         let request = try makeRequest(path: "users/fcm-token", method: "PATCH", body: body)
         _ = try await sendData(request)
     }
+
+    // MARK: - Roast Level
+
+    struct RoastLevelRequest: Encodable {
+        let roastLevel: String
+    }
+
+    func updateRoastLevel(_ level: NaggingLevel) async throws {
+        let serverLevel: String
+        switch level {
+        case .mild:   serverLevel = "MILD"
+        case .medium: serverLevel = "MEDIUM"
+        case .spicy:  serverLevel = "SPICY"
+        }
+        let body = RoastLevelRequest(roastLevel: serverLevel)
+        let request = try makeRequest(path: "users/roast-level", method: "PATCH", body: body)
+        _ = try await sendData(request)
+    }
 }
 
 // MARK: - Private Helpers

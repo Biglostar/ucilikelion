@@ -109,6 +109,7 @@ final class SettingsStore: ObservableObject {
     @Published var requestShowLogin: Bool = false
 
     private let key = "LikeLionBudget.AppSettings.v1"
+    private let apiClient = APIClient()
 
     init() {
         if let loaded = Self.load(key: key) {
@@ -152,6 +153,13 @@ final class SettingsStore: ObservableObject {
 
     var naggingLevel: NaggingLevel { settings.naggingLevel }
     var notificationsEnabled: Bool { settings.notificationsEnabled }
+
+    func setNaggingLevel(_ level: NaggingLevel) {
+        settings.naggingLevel = level
+        Task {
+            try? await apiClient.updateRoastLevel(level)
+        }
+    }
 
     // MARK: - 사용자 / Plaid 설정
 
