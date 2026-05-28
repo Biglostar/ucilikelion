@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from "../prisma";
 import { generateAiBudgetAnalysis } from '../services/aiService';
-import { updateUserBudgets } from './dashboardController';
-import { TransactionType } from '@prisma/client';
 // import { generateAiBudgetAnalysis } from '../services/aiService';
 // import { TransactionType } from '@prisma/client';
 
@@ -59,29 +57,25 @@ export async function createGoal(req: Request, res: Response) {
 
     if (budgetSource === "AUTO_AVG_3M") {
       const now = new Date();
-      const oldest = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const last3Months = [];
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        last3Months.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+      }
 
-      const catTxns = await prisma.transaction.findMany({
+      const historySummaries = await prisma.monthlySummary.findMany({
         where: {
           userId,
-          category,
-          type: 'EXPENSE',
-          occurredAt: { gte: oldest, lt: startOfThisMonth }
+          OR: last3Months
         }
       });
 
-      // 월별 지출 합산 후 평균
-      const monthTotals: Record<string, number> = {};
-      for (const tx of catTxns) {
-        const d = new Date(tx.occurredAt);
-        const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
-        monthTotals[key] = (monthTotals[key] || 0) + tx.amountCents;
+      if (historySummaries.length > 0) {
+        const totalSum = historySummaries.reduce((sum, s) => sum + s.totalSpentCents, 0);
+        monthlyBudgetCents = Math.floor(totalSum / historySummaries.length);
+      } else {
+        monthlyBudgetCents = 200000; //default
       }
-      const values = Object.values(monthTotals).filter(v => v > 0);
-      monthlyBudgetCents = values.length > 0
-        ? Math.floor(values.reduce((a, b) => a + b, 0) / values.length)
-        : 100000; // 데이터 없으면 기본 $1,000
     }
 
     const now = new Date();
@@ -104,26 +98,7 @@ export async function createGoal(req: Request, res: Response) {
       }
     });
 
-    // 목표 생성 후 이번 달 해당 카테고리 지출 즉시 계산
-    const spent = await prisma.transaction.aggregate({
-      _sum: { amountCents: true },
-      where: {
-        userId,
-        category,
-        type: TransactionType.EXPENSE,
-        occurredAt: { gte: startOfMonth, lte: endOfMonth }
-      }
-    });
-    const currentSpent = spent._sum.amountCents || 0;
-    if (currentSpent > 0) {
-      await prisma.goal.update({
-        where: { id: goal.id },
-        data: { currentSpentCents: currentSpent }
-      });
-    }
-
-    const updatedGoal = await prisma.goal.findUnique({ where: { id: goal.id } });
-    return res.status(201).json(updatedGoal);
+    return res.status(201).json(goal);
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Goal creation failed" });

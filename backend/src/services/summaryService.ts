@@ -29,7 +29,7 @@ export async function updateMonthlySummary(
   });
 }
 
-export async function syncMonthlySummary(userId: string, year: number, month: number) {
+async function syncMonthlySummary(userId: string, year: number, month: number) {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
 
@@ -77,7 +77,7 @@ cron.schedule('1 0 1 * *', async () => {
   for (const user of users) {
     try {
       await syncMonthlySummary(user.id, year, month);
-
+      
       const report = await generateMonthlyReport(user.id);
 
       await prisma.report.create({

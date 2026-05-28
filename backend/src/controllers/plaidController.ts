@@ -4,10 +4,7 @@ import { prisma } from '../prisma';
 import { CountryCode, Products } from 'plaid';
 import { TransactionType } from '@prisma/client';
 import { mapPlaidCategory } from '../utils/categoryMapper';
-import { updateUserBudgets, recalculateBudgets } from './dashboardController';
-import { determineStatus } from './transactionController';
-import { generateNaggingMessage } from '../services/aiService';
-import { TransactionType as PrismaTransactionType } from '@prisma/client';
+import { updateUserBudgets } from './dashboardController';
 
 // Dev only
 import { Products as PlaidProducts } from 'plaid';
@@ -61,9 +58,6 @@ export const exchangePublicToken = async (req: Request, res: Response) => {
 export const syncTransactions = async (req: Request, res: Response) => {
   try {
     const userId = req.headers['x-user-id'] as string;
-    if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
-
-    console.log(`[Plaid Sync] userId: ${userId}`);
 
     // Get the user's saved Plaid token
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -71,58 +65,37 @@ export const syncTransactions = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Bank account not linked" });
     }
 
-    // Production Plaid: refresh 먼저 요청 후 fetch
-    console.log(`[Plaid Sync] Calling transactionsRefresh...`);
-    try {
-      await plaidClient.transactionsRefresh({ access_token: user.plaidAccessToken });
-      console.log(`[Plaid Sync] transactionsRefresh done`);
-    } catch (e) {
-      const code = (e as any)?.response?.data?.error_code;
-      console.log(`[Plaid Sync] transactionsRefresh skipped: ${code}`);
-    }
-
-    // Fetch last 90 days
-    console.log(`[Plaid Sync] Calling transactionsGet...`);
+    // Fetch last 30 days
     const now = new Date();
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(now.getDate() - 90);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30);
 
     const response = await plaidClient.transactionsGet({
       access_token: user.plaidAccessToken,
-      start_date: ninetyDaysAgo.toISOString().split('T')[0],
+      start_date: thirtyDaysAgo.toISOString().split('T')[0],
       end_date: now.toISOString().split('T')[0],
     });
-    console.log(`[Plaid Sync] Got ${response.data.transactions.length} transactions`);
 
     const transactions = response.data.transactions;
     let addedCount = 0;
 
     for (const pt of transactions) {
-      const isExpense = pt.amount > 0;
-      const type = isExpense ? TransactionType.EXPENSE : TransactionType.INCOME;
-      const plaidDetailedCategory = pt.personal_finance_category?.detailed;
-      const amountCents = Math.round(Math.abs(pt.amount) * 100);
-      const txDate = new Date(pt.date);
-
-      // pending→posted 전환 시 같은 거래가 다른 ID로 중복 유입 방지
-      const duplicate = await prisma.transaction.findFirst({
-        where: {
-          userId,
-          title: pt.name || "Unknown",
-          amountCents,
-          type,
-          occurredAt: {
-            gte: new Date(txDate.getTime() - 2 * 24 * 60 * 60 * 1000),
-            lte: new Date(txDate.getTime() + 2 * 24 * 60 * 60 * 1000),
-          }
-        }
+      // Prevent duplicates using the unique Plaid ID
+      const existing = await prisma.transaction.findUnique({
+        where: { plaidTxnId: pt.transaction_id }
       });
-      if (duplicate && duplicate.plaidTxnId !== pt.transaction_id) continue;
 
-      const result = await prisma.transaction.upsert({
-        where: { plaidTxnId: pt.transaction_id },
-        update: {},
-        create: {
+      if (!existing) {
+        // Plaid amounts: Positive = Expense, Negative = Income
+        const isExpense = pt.amount > 0;
+        const type = isExpense ? TransactionType.EXPENSE : TransactionType.INCOME;
+        const plaidDetailedCategory = pt.personal_finance_category?.detailed;
+        
+        // Convert to cents (e.g., $5.50 -> 550)
+        const amountCents = Math.round(Math.abs(pt.amount) * 100);
+
+        await prisma.transaction.create({
+          data: {
             userId: userId,
             plaidTxnId: pt.transaction_id,
             accountId: pt.account_id,
@@ -133,84 +106,16 @@ export const syncTransactions = async (req: Request, res: Response) => {
             occurredAt: new Date(pt.date),
           }
         });
-      if (result.plaidTxnId) addedCount++;
-    }
-
-    // 실제 거래내역 기반으로 MonthlySummary 재계산
-    const allTxns = await prisma.transaction.findMany({ where: { userId } });
-    const summaryMap: Record<string, { spent: number; income: number }> = {};
-    for (const tx of allTxns) {
-      const d = new Date(tx.occurredAt);
-      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
-      if (!summaryMap[key]) summaryMap[key] = { spent: 0, income: 0 };
-      if (tx.type === PrismaTransactionType.EXPENSE) summaryMap[key].spent += tx.amountCents;
-      else summaryMap[key].income += tx.amountCents;
-    }
-    for (const [key, val] of Object.entries(summaryMap)) {
-      const [year, month] = key.split('-').map(Number);
-      await prisma.monthlySummary.upsert({
-        where: { userId_year_month: { userId, year, month } },
-        update: { totalSpentCents: val.spent, totalIncomeCents: val.income },
-        create: { userId, year, month, totalSpentCents: val.spent, totalIncomeCents: val.income },
-      });
-    }
-
-    await updateUserBudgets(userId);
-    await recalculateBudgets(userId);
-
-    // 캐릭터 상태 업데이트
-    const updatedUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { totalMonthlyBudgetCents: true, roastLevel: true, characterStatus: true }
-    });
-
-    if (updatedUser && updatedUser.totalMonthlyBudgetCents > 0) {
-      const now2 = new Date();
-      const summary = await prisma.monthlySummary.findUnique({
-        where: { userId_year_month: { userId, year: now2.getFullYear(), month: now2.getMonth() + 1 } }
-      });
-      const totalSpent = summary?.totalSpentCents ?? 0;
-      const totalRemainingPct = ((updatedUser.totalMonthlyBudgetCents - totalSpent) / updatedUser.totalMonthlyBudgetCents) * 100;
-      const newStatus = determineStatus(totalRemainingPct);
-
-      if (newStatus !== updatedUser.characterStatus) {
-        const characterMsg = await generateNaggingMessage("monthly_progress", Math.floor(totalRemainingPct), updatedUser.roastLevel);
-        await prisma.user.update({
-          where: { id: userId },
-          data: { characterStatus: newStatus, characterMessage: characterMsg }
-        });
+        addedCount++;
       }
     }
+    // --- NEW LINE: Instantly recalculate budgets based on new data ---
+    await updateUserBudgets(userId);
 
     res.json({ success: true, added: addedCount });
   } catch (error) {
     console.error("Sync Error:", error);
     res.status(500).json({ error: "Failed to sync transactions" });
-  }
-};
-
-// Plaid 데이터 전체 삭제 후 재동기화
-export const resetAndSyncTransactions = async (req: Request, res: Response) => {
-  try {
-    const userId = req.headers['x-user-id'] as string;
-    if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
-
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user || !user.plaidAccessToken) {
-      return res.status(400).json({ error: "Bank account not linked" });
-    }
-
-    // 모든 거래내역 삭제 (sandbox + 수동 입력 포함 전체 초기화)
-    const deleted = await prisma.transaction.deleteMany({ where: { userId } });
-    await prisma.monthlySummary.deleteMany({ where: { userId } });
-    console.log(`[Reset Sync] Deleted ${deleted.count} transactions for ${userId}`);
-
-    // 재동기화 요청을 기존 sync로 위임
-    req.headers['x-user-id'] = userId;
-    return syncTransactions(req, res);
-  } catch (error) {
-    console.error("Reset sync error:", error);
-    return res.status(500).json({ error: "Failed to reset and sync" });
   }
 };
 
