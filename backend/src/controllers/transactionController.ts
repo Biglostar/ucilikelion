@@ -293,36 +293,40 @@ export async function deleteTransaction(req: Request, res: Response) {
 
     const id = req.params.id as string;
 
-    const existing = await prisma.transaction.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ error: "Transaction not found" });
-    if (existing.userId !== userId) return res.status(403).json({ error: "Unauthorized" });
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.transaction.findUnique({ where: { id } });
+      if (!existing) throw Object.assign(new Error("Transaction not found"), { status: 404 });
+      if (existing.userId !== userId) throw Object.assign(new Error("Unauthorized"), { status: 403 });
 
-    await prisma.transaction.delete({ where: { id } });
+      await tx.transaction.delete({ where: { id } });
 
-    await updateMonthlySummary(
-      existing.userId,
-      existing.occurredAt,
-      -existing.amountCents,
-      existing.type as "EXPENSE" | "INCOME"
-    );
+      await updateMonthlySummary(
+        existing.userId,
+        existing.occurredAt,
+        -existing.amountCents,
+        existing.type as "EXPENSE" | "INCOME"
+      );
 
-    // Keep goal gauge accurate after deletion
-    const goal = await prisma.goal.findFirst({
-      where: { userId, category: existing.category, status: "ACTIVE" },
-      orderBy: { isSelected: "desc" },
-    });
-    if (goal) {
-      const updated = existing.type === "EXPENSE"
-        ? Math.max(0, goal.currentSpentCents - existing.amountCents)  // undo expense
-        : goal.currentSpentCents + existing.amountCents;              // undo income offset
-      await prisma.goal.update({
-        where: { id: goal.id },
-        data: { currentSpentCents: updated },
+      // Keep goal gauge accurate: undo expense or reverse income offset
+      const goal = await tx.goal.findFirst({
+        where: { userId, category: existing.category, status: "ACTIVE" },
+        orderBy: { isSelected: "desc" },
       });
-    }
+      if (goal) {
+        const updated = existing.type === "EXPENSE"
+          ? Math.max(0, goal.currentSpentCents - existing.amountCents)
+          : goal.currentSpentCents + existing.amountCents;
+        await tx.goal.update({
+          where: { id: goal.id },
+          data: { currentSpentCents: updated },
+        });
+      }
+    }, { timeout: 20000 });
 
     return res.status(200).json({ message: "Deleted successfully" });
-  } catch (e) {
+  } catch (e: any) {
+    if (e.status === 404) return res.status(404).json({ error: "Transaction not found" });
+    if (e.status === 403) return res.status(403).json({ error: "Unauthorized" });
     console.error(e);
     return res.status(500).json({ error: "Failed to delete transaction" });
   }
