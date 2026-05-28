@@ -4,7 +4,7 @@ import { prisma } from '../prisma';
 import { CountryCode, Products } from 'plaid';
 import { TransactionType } from '@prisma/client';
 import { mapPlaidCategory } from '../utils/categoryMapper';
-import { updateUserBudgets } from './dashboardController';
+import { updateUserBudgets, recalculateBudgets } from './dashboardController';
 import { determineStatus } from './transactionController';
 import { generateNaggingMessage } from '../services/aiService';
 import { TransactionType as PrismaTransactionType } from '@prisma/client';
@@ -140,6 +140,7 @@ export const syncTransactions = async (req: Request, res: Response) => {
     }
 
     await updateUserBudgets(userId);
+    await recalculateBudgets(userId);
 
     // 캐릭터 상태 업데이트
     const updatedUser = await prisma.user.findUnique({

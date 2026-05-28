@@ -253,11 +253,18 @@ struct HomeView: View {
 
     private func loadDashboard() {
         Task {
-            do {
-                let d = try await APIClient().fetchDashboard()
-                await MainActor.run { dashboard = d }
-            } catch {
-                await MainActor.run { dashboard = nil }
+            for attempt in 1...3 {
+                do {
+                    let d = try await APIClient().fetchDashboard()
+                    await MainActor.run { dashboard = d }
+                    return
+                } catch {
+                    if attempt < 3 {
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    } else {
+                        await MainActor.run { dashboard = nil }
+                    }
+                }
             }
         }
     }

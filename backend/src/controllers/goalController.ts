@@ -57,25 +57,29 @@ export async function createGoal(req: Request, res: Response) {
 
     if (budgetSource === "AUTO_AVG_3M") {
       const now = new Date();
-      const last3Months = [];
-      for (let i = 1; i <= 3; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        last3Months.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
-      }
+      const oldest = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      const historySummaries = await prisma.monthlySummary.findMany({
+      const catTxns = await prisma.transaction.findMany({
         where: {
           userId,
-          OR: last3Months
+          category,
+          type: 'EXPENSE',
+          occurredAt: { gte: oldest, lt: startOfThisMonth }
         }
       });
 
-      if (historySummaries.length > 0) {
-        const totalSum = historySummaries.reduce((sum, s) => sum + s.totalSpentCents, 0);
-        monthlyBudgetCents = Math.floor(totalSum / historySummaries.length);
-      } else {
-        monthlyBudgetCents = 200000; //default
+      // 월별 지출 합산 후 평균
+      const monthTotals: Record<string, number> = {};
+      for (const tx of catTxns) {
+        const d = new Date(tx.occurredAt);
+        const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+        monthTotals[key] = (monthTotals[key] || 0) + tx.amountCents;
       }
+      const values = Object.values(monthTotals).filter(v => v > 0);
+      monthlyBudgetCents = values.length > 0
+        ? Math.floor(values.reduce((a, b) => a + b, 0) / values.length)
+        : 100000; // 데이터 없으면 기본 $1,000
     }
 
     const now = new Date();
