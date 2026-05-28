@@ -176,4 +176,17 @@ final class SettingsStore: ObservableObject {
     func setHasAcceptedTerms(_ value: Bool) {
         settings.hasAcceptedTerms = value
     }
+
+    func setNaggingLevel(_ level: NaggingLevel) {
+        settings.naggingLevel = level
+        let backendValue: String
+        switch level {
+        case .mild:   backendValue = "MILD"
+        case .medium: backendValue = "MEDIUM"
+        case .spicy:  backendValue = "SPICY"
+        }
+        Task {
+            try? await APIClient().updateRoastLevel(backendValue)
+        }
+    }
 }

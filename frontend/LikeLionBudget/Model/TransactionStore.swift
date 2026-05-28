@@ -91,6 +91,7 @@ final class TransactionStore: ObservableObject {
             } catch {
                 print("⚠️ createTransaction API failed:", error)
             }
+            NotificationCenter.default.post(name: .transactionDidChange, object: nil)
         }
     }
 
@@ -123,6 +124,7 @@ final class TransactionStore: ObservableObject {
             } catch {
                 print("⚠️ updateTransaction API failed:", error)
             }
+            NotificationCenter.default.post(name: .transactionDidChange, object: nil)
         }
     }
 
@@ -133,13 +135,17 @@ final class TransactionStore: ObservableObject {
         _realTransactions.removeAll { $0.id == id }
         transactions = _realTransactions
 
-        guard let backendId else { return }
+        guard let backendId else {
+            NotificationCenter.default.post(name: .transactionDidChange, object: nil)
+            return
+        }
         Task {
             do {
                 try await api.deleteTransaction(id: backendId)
             } catch {
                 print("⚠️ deleteTransaction API failed:", error)
             }
+            NotificationCenter.default.post(name: .transactionDidChange, object: nil)
         }
     }
 
@@ -190,4 +196,5 @@ final class TransactionStore: ObservableObject {
 
 extension Notification.Name {
     static let plaidDidSync = Notification.Name("plaidDidSync")
+    static let transactionDidChange = Notification.Name("transactionDidChange")
 }

@@ -283,36 +283,33 @@ export async function deleteTransaction(req: Request, res: Response) {
     if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
 
     const id = req.params.id as string;
-    const { title, amountCents, type, category, occurredAt, isFixed, note } = req.body;
 
     const existing = await prisma.transaction.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "Transaction not found" });
     if (existing.userId !== userId) return res.status(403).json({ error: "Unauthorized" });
 
-    const updated = await prisma.transaction.update({
-      where: { id },
-      data: {
-        ...(title !== undefined && { title: String(title) }),
-        ...(amountCents !== undefined && { amountCents: Number(amountCents) }),
-        ...(type !== undefined && { type: type as "INCOME" | "EXPENSE" }),
-        ...(category !== undefined && { category: String(category) }),
-        ...(occurredAt !== undefined && { occurredAt: new Date(occurredAt as string) }),
-        ...(isFixed !== undefined && { isFixed: Boolean(isFixed) }),
-        ...(note !== undefined && { note: note as string | null }),
-      }
-    });
-
-    // Sync monthly summary delta when expense amount changes
-    if (existing.type === "EXPENSE" && amountCents !== undefined && existing.amountCents !== amountCents) {
-      await updateMonthlySummary(userId, existing.occurredAt, amountCents - existing.amountCents);
-    }
+    await prisma.transaction.delete({ where: { id } });
 
     await updateMonthlySummary(
       existing.userId,
       existing.occurredAt,
       -existing.amountCents,
-      existing.type
+      existing.type as "EXPENSE" | "INCOME"
     );
+
+    // Decrement goal spending so the progress bar stays accurate
+    if (existing.type === "EXPENSE") {
+      const goal = await prisma.goal.findFirst({
+        where: { userId, category: existing.category, status: "ACTIVE" },
+        orderBy: { isSelected: "desc" },
+      });
+      if (goal) {
+        await prisma.goal.update({
+          where: { id: goal.id },
+          data: { currentSpentCents: Math.max(0, goal.currentSpentCents - existing.amountCents) },
+        });
+      }
+    }
 
     return res.status(200).json({ message: "Deleted successfully" });
   } catch (e) {

@@ -36,6 +36,14 @@ final class GoalsStore: ObservableObject {
         _realGoals = Self.load(key: key) ?? []
         goals = _realGoals
         Task { await loadRemoteGoals() }
+        // Reload goal spending whenever a transaction is created/updated/deleted
+        NotificationCenter.default.addObserver(
+            forName: .transactionDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { await self?.loadRemoteGoals() }
+        }
     }
 
     func reloadFromServer() async {

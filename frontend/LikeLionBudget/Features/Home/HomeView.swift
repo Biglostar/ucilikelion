@@ -64,6 +64,9 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .plaidDidSync)) { _ in
             loadDashboard()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .transactionDidChange)) { _ in
+            loadDashboard()
+        }
         .onChange(of: settingsStore.settings.userEmail) { _, email in
             // 로그인 완료 시 올바른 userId로 dashboard 재로드
             if email != nil { loadDashboard() }

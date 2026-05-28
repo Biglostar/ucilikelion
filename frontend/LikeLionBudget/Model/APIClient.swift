@@ -537,6 +537,18 @@ struct APIClient {
         _ = try await sendData(request)
     }
 
+    // MARK: - Roast Level
+
+    struct RoastLevelRequest: Encodable {
+        let roastLevel: String
+    }
+
+    func updateRoastLevel(_ level: String) async throws {
+        let body = RoastLevelRequest(roastLevel: level)
+        let request = try makeRequest(path: "users/roast-level", method: "PATCH", body: body)
+        _ = try await sendData(request)
+    }
+
     func deleteAccount() async throws {
         let request = try makeRequest(path: "users", method: "DELETE")
         _ = try await sendData(request)
