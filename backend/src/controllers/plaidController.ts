@@ -7,6 +7,7 @@ import { mapPlaidCategory } from '../utils/categoryMapper';
 import { updateUserBudgets } from './dashboardController';
 import { determineStatus } from './transactionController';
 import { generateNaggingMessage } from '../services/aiService';
+import { TransactionType as PrismaTransactionType } from '@prisma/client';
 
 // Dev only
 import { Products as PlaidProducts } from 'plaid';
@@ -118,6 +119,26 @@ export const syncTransactions = async (req: Request, res: Response) => {
         });
       if (result.plaidTxnId) addedCount++;
     }
+
+    // 실제 거래내역 기반으로 MonthlySummary 재계산
+    const allTxns = await prisma.transaction.findMany({ where: { userId } });
+    const summaryMap: Record<string, { spent: number; income: number }> = {};
+    for (const tx of allTxns) {
+      const d = new Date(tx.occurredAt);
+      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+      if (!summaryMap[key]) summaryMap[key] = { spent: 0, income: 0 };
+      if (tx.type === PrismaTransactionType.EXPENSE) summaryMap[key].spent += tx.amountCents;
+      else summaryMap[key].income += tx.amountCents;
+    }
+    for (const [key, val] of Object.entries(summaryMap)) {
+      const [year, month] = key.split('-').map(Number);
+      await prisma.monthlySummary.upsert({
+        where: { userId_year_month: { userId, year, month } },
+        update: { totalSpentCents: val.spent, totalIncomeCents: val.income },
+        create: { userId, year, month, totalSpentCents: val.spent, totalIncomeCents: val.income },
+      });
+    }
+
     await updateUserBudgets(userId);
 
     // 캐릭터 상태 업데이트
