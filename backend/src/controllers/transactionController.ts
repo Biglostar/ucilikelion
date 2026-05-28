@@ -100,6 +100,18 @@ export async function createTransaction(req: Request, res: Response) {
         update: { totalIncomeCents: { increment: amountCents } },
         create: { userId, year, month, totalIncomeCents: amountCents },
       });
+      // If this income belongs to a goal category (e.g. friends paying back their share),
+      // reduce the goal's spending so the gauge reflects the real net cost.
+      const offsetGoal = await tx.goal.findFirst({
+        where: { userId, category, status: "ACTIVE" },
+        orderBy: { isSelected: "desc" },
+      });
+      if (offsetGoal) {
+        await tx.goal.update({
+          where: { id: offsetGoal.id },
+          data: { currentSpentCents: Math.max(0, offsetGoal.currentSpentCents - amountCents) },
+        });
+      }
       return { transaction, alert: { shouldNotify: false } };
     }
 
@@ -229,31 +241,28 @@ export async function updateTransaction(req: Request, res: Response) {
         },
       });
 
-      // Goal: decre old and update new
-      if (existing.type === "EXPENSE") {
-        const oldGoal = await tx.goal.findFirst({
-          where: { userId, category: existing.category, status: "ACTIVE" },
-          orderBy: { isSelected: "desc" },
-        });
-        if (oldGoal) {
-          await tx.goal.update({
-            where: { id: oldGoal.id },
-            data: { currentSpentCents: Math.max(0, oldGoal.currentSpentCents - existing.amountCents) },
-          });
-        }
+      // Goal: undo the effect of the old transaction, then apply the new one
+      const oldGoal = await tx.goal.findFirst({
+        where: { userId, category: existing.category, status: "ACTIVE" },
+        orderBy: { isSelected: "desc" },
+      });
+      if (oldGoal) {
+        const revert = existing.type === "EXPENSE"
+          ? Math.max(0, oldGoal.currentSpentCents - existing.amountCents)   // undo expense
+          : oldGoal.currentSpentCents + existing.amountCents;               // undo income offset
+        await tx.goal.update({ where: { id: oldGoal.id }, data: { currentSpentCents: revert } });
       }
-      if (newType === "EXPENSE") {
-        const newGoal = await tx.goal.findFirst({
-          where: { userId, category: newCategory, status: "ACTIVE" },
-          orderBy: { isSelected: "desc" },
-        });
-        if (newGoal) {
-          const freshGoal = await tx.goal.findUnique({ where: { id: newGoal.id } });
-          await tx.goal.update({
-            where: { id: newGoal.id },
-            data: { currentSpentCents: (freshGoal!.currentSpentCents) + newAmountCents },
-          });
-        }
+
+      const newGoal = await tx.goal.findFirst({
+        where: { userId, category: newCategory, status: "ACTIVE" },
+        orderBy: { isSelected: "desc" },
+      });
+      if (newGoal) {
+        const fresh = await tx.goal.findUnique({ where: { id: newGoal.id } });
+        const apply = newType === "EXPENSE"
+          ? fresh!.currentSpentCents + newAmountCents                        // add expense
+          : Math.max(0, fresh!.currentSpentCents - newAmountCents);          // apply income offset
+        await tx.goal.update({ where: { id: newGoal.id }, data: { currentSpentCents: apply } });
       }
 
       return tx.transaction.update({
@@ -297,18 +306,19 @@ export async function deleteTransaction(req: Request, res: Response) {
       existing.type as "EXPENSE" | "INCOME"
     );
 
-    // Decrement goal spending so the progress bar stays accurate
-    if (existing.type === "EXPENSE") {
-      const goal = await prisma.goal.findFirst({
-        where: { userId, category: existing.category, status: "ACTIVE" },
-        orderBy: { isSelected: "desc" },
+    // Keep goal gauge accurate after deletion
+    const goal = await prisma.goal.findFirst({
+      where: { userId, category: existing.category, status: "ACTIVE" },
+      orderBy: { isSelected: "desc" },
+    });
+    if (goal) {
+      const updated = existing.type === "EXPENSE"
+        ? Math.max(0, goal.currentSpentCents - existing.amountCents)  // undo expense
+        : goal.currentSpentCents + existing.amountCents;              // undo income offset
+      await prisma.goal.update({
+        where: { id: goal.id },
+        data: { currentSpentCents: updated },
       });
-      if (goal) {
-        await prisma.goal.update({
-          where: { id: goal.id },
-          data: { currentSpentCents: Math.max(0, goal.currentSpentCents - existing.amountCents) },
-        });
-      }
     }
 
     return res.status(200).json({ message: "Deleted successfully" });
