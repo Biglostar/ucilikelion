@@ -284,35 +284,39 @@ export async function deleteTransaction(req: Request, res: Response) {
 
     const id = req.params.id as string;
 
-    const existing = await prisma.transaction.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ error: "Transaction not found" });
-    if (existing.userId !== userId) return res.status(403).json({ error: "Unauthorized" });
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.transaction.findUnique({ where: { id } });
+      if (!existing) throw Object.assign(new Error("Transaction not found"), { status: 404 });
+      if (existing.userId !== userId) throw Object.assign(new Error("Unauthorized"), { status: 403 });
 
-    await prisma.transaction.delete({ where: { id } });
+      await tx.transaction.delete({ where: { id } });
 
-    await updateMonthlySummary(
-      existing.userId,
-      existing.occurredAt,
-      -existing.amountCents,
-      existing.type as "EXPENSE" | "INCOME"
-    );
+      await updateMonthlySummary(
+        existing.userId,
+        existing.occurredAt,
+        -existing.amountCents,
+        existing.type as "EXPENSE" | "INCOME"
+      );
 
-    // Decrement goal spending so the progress bar stays accurate
-    if (existing.type === "EXPENSE") {
-      const goal = await prisma.goal.findFirst({
-        where: { userId, category: existing.category, status: "ACTIVE" },
-        orderBy: { isSelected: "desc" },
-      });
-      if (goal) {
-        await prisma.goal.update({
-          where: { id: goal.id },
-          data: { currentSpentCents: Math.max(0, goal.currentSpentCents - existing.amountCents) },
+      // Decrement goal spending so the progress bar stays accurate
+      if (existing.type === "EXPENSE") {
+        const goal = await tx.goal.findFirst({
+          where: { userId, category: existing.category, status: "ACTIVE" },
+          orderBy: { isSelected: "desc" },
         });
+        if (goal) {
+          await tx.goal.update({
+            where: { id: goal.id },
+            data: { currentSpentCents: Math.max(0, goal.currentSpentCents - existing.amountCents) },
+          });
+        }
       }
-    }
+    }, { timeout: 20000 });
 
     return res.status(200).json({ message: "Deleted successfully" });
-  } catch (e) {
+  } catch (e: any) {
+    if (e.status === 404) return res.status(404).json({ error: "Transaction not found" });
+    if (e.status === 403) return res.status(403).json({ error: "Unauthorized" });
     console.error(e);
     return res.status(500).json({ error: "Failed to delete transaction" });
   }
