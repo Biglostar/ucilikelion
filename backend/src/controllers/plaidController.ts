@@ -102,10 +102,26 @@ export const syncTransactions = async (req: Request, res: Response) => {
       const type = isExpense ? TransactionType.EXPENSE : TransactionType.INCOME;
       const plaidDetailedCategory = pt.personal_finance_category?.detailed;
       const amountCents = Math.round(Math.abs(pt.amount) * 100);
+      const txDate = new Date(pt.date);
+
+      // pending→posted 전환 시 같은 거래가 다른 ID로 중복 유입 방지
+      const duplicate = await prisma.transaction.findFirst({
+        where: {
+          userId,
+          title: pt.name || "Unknown",
+          amountCents,
+          type,
+          occurredAt: {
+            gte: new Date(txDate.getTime() - 2 * 24 * 60 * 60 * 1000),
+            lte: new Date(txDate.getTime() + 2 * 24 * 60 * 60 * 1000),
+          }
+        }
+      });
+      if (duplicate && duplicate.plaidTxnId !== pt.transaction_id) continue;
 
       const result = await prisma.transaction.upsert({
         where: { plaidTxnId: pt.transaction_id },
-        update: {},  // 이미 있으면 업데이트 안 함
+        update: {},
         create: {
             userId: userId,
             plaidTxnId: pt.transaction_id,

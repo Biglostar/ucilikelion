@@ -121,10 +121,17 @@ struct GoalsListView: View {
                             .font(.custom(Theme.fontLaundry, size: 16))
                             .foregroundStyle(Theme.text)
 
-                        Text(goal.wrappedValue.category.displayNameKR)
-                            .font(.custom(Theme.fontLaundry, size: 12))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Theme.text.opacity(0.85))
+                        if let budget = goal.wrappedValue.monthlyBudgetCents, budget > 0 {
+                            Text("월 예산 \(Money.usdSignedString(fromCents: budget).replacingOccurrences(of: "+", with: ""))")
+                                .font(.custom(Theme.fontLaundry, size: 12))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Theme.progressFill)
+                        } else {
+                            Text(goal.wrappedValue.category.displayNameKR)
+                                .font(.custom(Theme.fontLaundry, size: 12))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Theme.text.opacity(0.85))
+                        }
                     }
 
                     Spacer(minLength: 0)
