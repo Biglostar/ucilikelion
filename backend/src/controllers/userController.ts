@@ -2,29 +2,41 @@ import { Request, Response } from "express";
 import { RoastLevel } from "@prisma/client";
 import { prisma } from "../prisma";
 
+export async function deleteAccount(req: Request, res: Response) {
+  try {
+    const userId = req.header("x-user-id");
+    if (!userId) return res.status(400).json({ error: "Missing x-user-id" });
+
+    await prisma.monthlySummary.deleteMany({ where: { userId } });
+    await prisma.report.deleteMany({ where: { userId } });
+    await prisma.user.delete({ where: { id: userId } });
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Account deletion error:", error);
+    return res.status(500).json({ error: "Failed to delete account" });
+  }
+}
+
 export async function updateRoastLevel(req: Request, res: Response) {
   try {
     const userId = req.header("x-user-id");
     const { roastLevel } = req.body;
 
-    if (!userId || !roastLevel) {
-      return res.status(400).json({ error: "Missing userId or roastLevel" });
-    }
-
-    const validLevels: RoastLevel[] = ["MILD", "MEDIUM", "SPICY"];
-    if (!validLevels.includes(roastLevel)) {
-      return res.status(400).json({ error: "Invalid roastLevel. Must be MILD, MEDIUM, or SPICY" });
+    if (!userId) return res.status(400).json({ error: "Missing x-user-id" });
+    if (!Object.values(RoastLevel).includes(roastLevel)) {
+      return res.status(400).json({ error: "Invalid roastLevel" });
     }
 
     await prisma.user.update({
       where: { id: userId as string },
-      data: { roastLevel: roastLevel as RoastLevel }
+      data: { roastLevel: roastLevel as RoastLevel },
     });
 
     return res.status(200).json({ success: true });
   } catch (error) {
-    console.error("RoastLevel update error:", error);
-    return res.status(500).json({ error: "Failed to update roastLevel" });
+    console.error("Roast level update error:", error);
+    return res.status(500).json({ error: "Failed to update roast level" });
   }
 }
 

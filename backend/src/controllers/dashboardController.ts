@@ -83,6 +83,73 @@ export async function getDashboardData(req: Request, res: Response) {
   }
 }
 
+// 최근 3개월(이번 달 제외) 평균 지출로 예산 자동 계산
+export const recalculateBudgets = async (userId: string) => {
+  const now = new Date();
+  const last3Months = [1, 2, 3].map(i => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    return { year: d.getFullYear(), month: d.getMonth() + 1 };
+  });
+
+  // 최근 3개월 거래내역
+  const oldest = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const txns = await prisma.transaction.findMany({
+    where: {
+      userId,
+      type: 'EXPENSE',
+      occurredAt: { gte: oldest, lt: startOfThisMonth }
+    }
+  });
+
+  // 월별 총 지출 계산
+  const monthTotals: Record<string, number> = {};
+  for (const tx of txns) {
+    const d = new Date(tx.occurredAt);
+    const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+    monthTotals[key] = (monthTotals[key] || 0) + tx.amountCents;
+  }
+
+  const monthValues = last3Months
+    .map(m => monthTotals[`${m.year}-${m.month}`] || 0)
+    .filter(v => v > 0);
+
+  if (monthValues.length > 0) {
+    const avgTotal = Math.floor(monthValues.reduce((a, b) => a + b, 0) / monthValues.length);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { totalMonthlyBudgetCents: avgTotal }
+    });
+  }
+
+  // 카테고리별 예산도 AUTO_AVG_3M 목표에 업데이트
+  const autoGoals = await prisma.goal.findMany({
+    where: { userId, status: 'ACTIVE', budgetSource: 'AUTO_AVG_3M' }
+  });
+
+  for (const goal of autoGoals) {
+    const catTxns = txns.filter(tx => tx.category === goal.category);
+    const catMonthTotals: Record<string, number> = {};
+    for (const tx of catTxns) {
+      const d = new Date(tx.occurredAt);
+      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+      catMonthTotals[key] = (catMonthTotals[key] || 0) + tx.amountCents;
+    }
+    const catValues = last3Months
+      .map(m => catMonthTotals[`${m.year}-${m.month}`] || 0)
+      .filter(v => v > 0);
+
+    if (catValues.length > 0) {
+      const avgCat = Math.floor(catValues.reduce((a, b) => a + b, 0) / catValues.length);
+      await prisma.goal.update({
+        where: { id: goal.id },
+        data: { monthlyBudgetCents: avgCat, baselineAvg3mCents: avgCat }
+      });
+    }
+  }
+};
+
 // --- REUSABLE HELPER FUNCTION ---
 // This handles the math and database updates, without needing req/res!
 export const updateUserBudgets = async (userId: string) => {

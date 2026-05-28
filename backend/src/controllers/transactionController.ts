@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma";
 import { generateNaggingMessage, generatePushNotification } from "../services/aiService";
+import { updateMonthlySummary } from "../services/summaryService";
 import { sendPushNotification } from "../services/pushService";
 /**
  * 전체 잔여 예산 비율에 따라 캐릭터의 경제적 상태를 결정합니다.
@@ -290,17 +291,14 @@ export async function deleteTransaction(req: Request, res: Response) {
 
       await tx.transaction.delete({ where: { id } });
 
-      const year = existing.occurredAt.getFullYear();
-      const month = existing.occurredAt.getMonth() + 1;
+      await updateMonthlySummary(
+        existing.userId,
+        existing.occurredAt,
+        -existing.amountCents,
+        existing.type as "EXPENSE" | "INCOME"
+      );
 
-      await tx.monthlySummary.upsert({
-        where: { userId_year_month: { userId, year, month } },
-        update: existing.type === "EXPENSE"
-          ? { totalSpentCents: { decrement: existing.amountCents } }
-          : { totalIncomeCents: { decrement: existing.amountCents } },
-        create: { userId, year, month },
-      });
-
+      // Decrement goal spending so the progress bar stays accurate
       if (existing.type === "EXPENSE") {
         const goal = await tx.goal.findFirst({
           where: { userId, category: existing.category, status: "ACTIVE" },
