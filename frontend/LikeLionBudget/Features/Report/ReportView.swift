@@ -23,7 +23,11 @@ struct ReportView: View {
 
     private var detectedFixedGroups: [RecurringGroup] {
         let cal = MockData.usCalendar
-        let fixed = store.transactions.filter { $0.isFixed && $0.amountCents < 0 }
+        guard let interval = cal.dateInterval(of: .month, for: selectedMonth) else { return [] }
+        let fixed = store.transactions.filter {
+            $0.isFixed && $0.amountCents < 0 &&
+            $0.date >= interval.start && $0.date < interval.end
+        }
         let byCategory = Dictionary(grouping: fixed) { $0.category }
         return BudgetCategory.allCases
             .filter { byCategory[$0] != nil }
