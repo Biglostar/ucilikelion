@@ -155,6 +155,32 @@ export const syncTransactions = async (req: Request, res: Response) => {
   }
 };
 
+// Plaid 데이터 전체 삭제 후 재동기화
+export const resetAndSyncTransactions = async (req: Request, res: Response) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.plaidAccessToken) {
+      return res.status(400).json({ error: "Bank account not linked" });
+    }
+
+    // Plaid에서 온 거래내역만 삭제 (plaidTxnId 있는 것)
+    const deleted = await prisma.transaction.deleteMany({
+      where: { userId, plaidTxnId: { not: null } }
+    });
+    console.log(`[Reset Sync] Deleted ${deleted.count} Plaid transactions for ${userId}`);
+
+    // 재동기화 요청을 기존 sync로 위임
+    req.headers['x-user-id'] = userId;
+    return syncTransactions(req, res);
+  } catch (error) {
+    console.error("Reset sync error:", error);
+    return res.status(500).json({ error: "Failed to reset and sync" });
+  }
+};
+
 // DEV ONLY: Generate a fake public token without a frontend UI
 export const testSandboxLogin = async (req: Request, res: Response) => {
   try {

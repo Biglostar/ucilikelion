@@ -488,10 +488,12 @@ struct APIClient {
     }
 
     func syncPlaid() async throws {
-        let request = try makeRequest(
-            path: "plaid/sync",
-            method: "POST"
-        )
+        let request = try makeRequest(path: "plaid/sync", method: "POST")
+        _ = try await send(request, as: EmptyResponse.self)
+    }
+
+    func resetAndSyncPlaid() async throws {
+        let request = try makeRequest(path: "plaid/reset-sync", method: "POST")
         _ = try await send(request, as: EmptyResponse.self)
     }
 

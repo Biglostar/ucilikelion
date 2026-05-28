@@ -223,6 +223,8 @@ struct PersonalInfoView: View {
     @State private var showLogoutDoneAlert = false
     @State private var isDeletingAccount = false
     @State private var showDeleteErrorAlert = false
+    @State private var showResetSyncAlert = false
+    @State private var isResettingSync = false
 
     private var displayName: String { settings.settings.userDisplayName ?? "—" }
     private var email: String { settings.settings.userEmail ?? "—" }
@@ -253,6 +255,14 @@ struct PersonalInfoView: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        personalInfoDivider()
+                        Button {
+                            showResetSyncAlert = true
+                        } label: {
+                            actionRow(label: "거래내역 초기화 후 재동기화")
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isResettingSync)
                         personalInfoDivider()
                         Button { showDeleteConfirm = true } label: {
                             actionRow(label: "계정 탈퇴")
@@ -307,6 +317,14 @@ struct PersonalInfoView: View {
             .presentationBackground(Color.white)
             .presentationCornerRadius(Theme.sheetCornerRadius)
         }
+        .alert("거래내역 초기화", isPresented: $showResetSyncAlert) {
+            Button("취소", role: .cancel) {}
+            Button("초기화 후 재동기화", role: .destructive) {
+                performResetSync()
+            }
+        } message: {
+            Text("Plaid에서 가져온 기존 거래내역을 모두 삭제하고 다시 불러와요.")
+        }
         .alert("계정 삭제 실패", isPresented: $showDeleteErrorAlert) {
             Button("확인") {}
         } message: {
@@ -359,6 +377,21 @@ struct PersonalInfoView: View {
     private func performLogout() {
         settings.clearGoogleUser()
         dismiss()
+    }
+
+    private func performResetSync() {
+        isResettingSync = true
+        Task {
+            do {
+                try await APIClient().resetAndSyncPlaid()
+                await MainActor.run {
+                    isResettingSync = false
+                    NotificationCenter.default.post(name: .plaidDidSync, object: nil)
+                }
+            } catch {
+                await MainActor.run { isResettingSync = false }
+            }
+        }
     }
 
     private func performAccountDeletion() {
