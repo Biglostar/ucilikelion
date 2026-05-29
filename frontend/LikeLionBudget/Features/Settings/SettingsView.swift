@@ -225,6 +225,7 @@ struct PersonalInfoView: View {
     @State private var showDeleteErrorAlert = false
     @State private var showResetSyncAlert = false
     @State private var isResettingSync = false
+    @State private var showReconnectPlaid = false
 
     private var displayName: String { settings.settings.userDisplayName ?? "—" }
     private var email: String { settings.settings.userEmail ?? "—" }
@@ -255,6 +256,13 @@ struct PersonalInfoView: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        personalInfoDivider()
+                        Button {
+                            showReconnectPlaid = true
+                        } label: {
+                            actionRow(label: "은행 재연결")
+                        }
+                        .buttonStyle(.plain)
                         personalInfoDivider()
                         Button {
                             showResetSyncAlert = true
@@ -315,6 +323,13 @@ struct PersonalInfoView: View {
             .presentationDetents([.height(Theme.AccountDeletion.sheetHeight)])
             .presentationDragIndicator(.visible)
             .presentationBackground(Color.white)
+            .presentationCornerRadius(Theme.sheetCornerRadius)
+        }
+        .sheet(isPresented: $showReconnectPlaid) {
+            PlaidLinkView(settingsStore: settings, onComplete: {
+                showReconnectPlaid = false
+            })
+            .presentationDetents([.large])
             .presentationCornerRadius(Theme.sheetCornerRadius)
         }
         .alert("거래내역 초기화", isPresented: $showResetSyncAlert) {
