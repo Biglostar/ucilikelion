@@ -96,7 +96,7 @@ export async function createGoal(req: Request, res: Response) {
         monthlyBudgetCents: Number(monthlyBudgetCents),
         baselineAvg3mCents: budgetSource === "AUTO_AVG_3M" ? Number(monthlyBudgetCents) : null,
         icon: icon || "💰",
-        memo: memo || "",
+        memo: memo?.trim() || `${title} 목표 추가됨`,
         budgetSource: budgetSource || "USER_SET",
         status: status || "ACTIVE", 
         startDate: startOfMonth,

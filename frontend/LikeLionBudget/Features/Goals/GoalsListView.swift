@@ -16,12 +16,14 @@ private struct GoalSheetItem: Identifiable {
 
 struct GoalsListView: View {
     @ObservedObject var goalsStore: GoalsStore
+    @ObservedObject var transactionStore: TransactionStore
     @EnvironmentObject var tutorialStore: TutorialStore
 
     // MARK: - State
 
     @State private var showAdd: Bool = false
     @State private var goalToEdit: GoalSheetItem? = nil
+    @State private var goalToView: GoalSheetItem? = nil
 
     var body: some View {
         ZStack {
@@ -33,7 +35,7 @@ struct GoalsListView: View {
                                 ForEach(Array(goalsStore.goals.enumerated()), id: \.element.id) { index, goal in
                                     goalRow(
                                         goal: goalsStore.binding(for: goal.id) ?? .constant(goal),
-                                        onTapToEdit: { goalToEdit = GoalSheetItem(goal: goal) }
+                                        onTapToEdit: { goalToView = GoalSheetItem(goal: goal) }
                                     )
                                     // 튜토리얼 goalToggle 프레임: 첫 번째 목표 행에 등록
                                     .background(index == 0 ? GeometryReader { bg in
@@ -94,6 +96,17 @@ struct GoalsListView: View {
                     AddGoalView(goalsStore: goalsStore, editingGoal: item.goal)
                         .presentationDetents([.large])
                         .presentationCornerRadius(Theme.sheetCornerRadius)
+                }
+                .sheet(item: $goalToView) { item in
+                    GoalDetailSheet(goal: item.goal, transactionStore: transactionStore, goalsStore: goalsStore, onEdit: {
+                        goalToView = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            goalToEdit = item
+                        }
+                    })
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(Theme.sheetCornerRadius)
                 }
             }
 

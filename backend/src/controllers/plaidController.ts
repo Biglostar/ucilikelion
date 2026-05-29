@@ -81,20 +81,32 @@ export const syncTransactions = async (req: Request, res: Response) => {
       console.log(`[Plaid Sync] transactionsRefresh skipped: ${code}`);
     }
 
-    // Fetch last 90 days
+    // Fetch last 180 days with pagination
     console.log(`[Plaid Sync] Calling transactionsGet...`);
     const now = new Date();
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(now.getDate() - 90);
+    const startDate = new Date();
+    startDate.setDate(now.getDate() - 180);
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = now.toISOString().split('T')[0];
 
-    const response = await plaidClient.transactionsGet({
-      access_token: user.plaidAccessToken,
-      start_date: ninetyDaysAgo.toISOString().split('T')[0],
-      end_date: now.toISOString().split('T')[0],
-    });
-    console.log(`[Plaid Sync] Got ${response.data.transactions.length} transactions`);
+    const allTransactions: any[] = [];
+    let offset = 0;
+    const pageSize = 500;
+    while (true) {
+      const response = await plaidClient.transactionsGet({
+        access_token: user.plaidAccessToken,
+        start_date: startDateStr,
+        end_date: endDateStr,
+        options: { count: pageSize, offset }
+      });
+      allTransactions.push(...response.data.transactions);
+      const total = response.data.total_transactions;
+      offset += response.data.transactions.length;
+      if (offset >= total) break;
+    }
+    console.log(`[Plaid Sync] Got ${allTransactions.length} transactions`);
 
-    const transactions = response.data.transactions;
+    const transactions = allTransactions;
     let addedCount = 0;
 
     for (const pt of transactions) {

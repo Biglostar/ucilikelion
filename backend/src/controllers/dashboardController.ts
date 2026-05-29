@@ -83,6 +83,36 @@ export async function getDashboardData(req: Request, res: Response) {
   }
 }
 
+// 말풍선 멘트 새로 생성
+export async function refreshCharacterMessage(req: Request, res: Response) {
+  try {
+    const userId = req.header("x-user-id");
+    if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { characterStatus: true, roastLevel: true, totalMonthlyBudgetCents: true }
+    });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const now = new Date();
+    const summary = await prisma.monthlySummary.findUnique({
+      where: { userId_year_month: { userId, year: now.getFullYear(), month: now.getMonth() + 1 } }
+    });
+    const totalSpent = summary?.totalSpentCents ?? 0;
+    const budget = user.totalMonthlyBudgetCents || 1;
+    const remainingPct = Math.floor(((budget - totalSpent) / budget) * 100);
+
+    const newMessage = await generateNaggingMessage("monthly_progress", remainingPct, user.roastLevel);
+    await prisma.user.update({ where: { id: userId }, data: { characterMessage: newMessage } });
+
+    return res.json({ bubbleText: newMessage });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Failed to refresh message" });
+  }
+}
+
 // 최근 3개월(이번 달 제외) 평균 지출로 예산 자동 계산
 export const recalculateBudgets = async (userId: string) => {
   const now = new Date();

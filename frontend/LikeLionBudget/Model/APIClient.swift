@@ -504,6 +504,12 @@ struct APIClient {
         return try await send(request, as: DashboardResponse.self)
     }
 
+    func refreshCharacterMessage() async throws -> String {
+        struct R: Codable { let bubbleText: String }
+        let request = try makeRequest(path: "dashboard/refresh-message", method: "POST")
+        return try await send(request, as: R.self).bubbleText
+    }
+
     // MARK: - Auth
 
     struct GoogleLoginRequest: Encodable {

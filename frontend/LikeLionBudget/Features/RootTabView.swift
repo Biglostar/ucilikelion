@@ -25,7 +25,7 @@ struct RootTabView: View {
                     }
                     .tag(0)
 
-                GoalsListView(goalsStore: goalsStore)
+                GoalsListView(goalsStore: goalsStore, transactionStore: transactionStore)
                     .tabItem {
                         Image(systemName: "checklist")
                         Text("목표")
