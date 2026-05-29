@@ -11,7 +11,6 @@
 		B0212D832F52DD7F008791A8 /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = B0212D822F52DD7F008791A8 /* LinkKit */; };
 		B0737EFB2FC6257E009AEC7D /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = B0737EFA2FC6257E009AEC7D /* FirebaseCore */; };
 		B0737EFD2FC6257E009AEC7D /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = B0737EFC2FC6257E009AEC7D /* FirebaseMessaging */; };
-		B0737EFF2FC96406009AEC7D /* GoalDetailSheet 2.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0737EFE2FC96406009AEC7D /* GoalDetailSheet 2.swift */; };
 		B0AA10022F5B0001000E1463 /* TutorialStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0AA10012F5B0001000E1463 /* TutorialStep.swift */; };
 		B0AA10042F5B0001000E1463 /* TutorialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0AA10032F5B0001000E1463 /* TutorialStore.swift */; };
 		B0AA10062F5B0001000E1463 /* TutorialOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0AA10052F5B0001000E1463 /* TutorialOverlayView.swift */; };
@@ -59,7 +58,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		B0737EFE2FC96406009AEC7D /* GoalDetailSheet 2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GoalDetailSheet 2.swift"; sourceTree = "<group>"; };
 		B0AA10012F5B0001000E1463 /* TutorialStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialStep.swift; sourceTree = "<group>"; };
 		B0AA10032F5B0001000E1463 /* TutorialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialStore.swift; sourceTree = "<group>"; };
 		B0AA10052F5B0001000E1463 /* TutorialOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialOverlayView.swift; sourceTree = "<group>"; };
@@ -257,7 +255,6 @@
 		B0FA95122F2197AF009D6BDB /* Goals */ = {
 			isa = PBXGroup;
 			children = (
-				B0737EFE2FC96406009AEC7D /* GoalDetailSheet 2.swift */,
 				B0FA95192F219906009D6BDB /* GoalsListView.swift */,
 				B0FA951B2F219AB0009D6BDB /* AddGoalView.swift */,
 				B0FA951D2F219F1B009D6BDB /* GoalsPickerSheet.swift */,
@@ -381,7 +378,6 @@
 				B0FA95712F2F4A01009D6BDB /* HomeBubbleLayout.swift in Sources */,
 				B0FA95422F2E9B01009D6BDB /* IncomeExpenseSegment.swift in Sources */,
 				B0FA950D2F219466009D6BDB /* RootTabView.swift in Sources */,
-				B0737EFF2FC96406009AEC7D /* GoalDetailSheet 2.swift in Sources */,
 				B0FA95542F2F0B0E009D6BDB /* Color+Hex.swift in Sources */,
 				B0FA95162F219862009D6BDB /* ReportView.swift in Sources */,
 				B0B398D42F188B8B000E1463 /* TransactionStore.swift in Sources */,
