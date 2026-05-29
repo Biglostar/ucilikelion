@@ -42,10 +42,9 @@ struct HomeView: View {
                     homeScrollContent
                 }
                 .refreshable {
-                    async let _ = APIClient().refreshCharacterMessage()
+                    try? await APIClient().refreshCharacterMessage()
                     store.reload()
                     loadDashboard()
-                    await Task.yield()
                 }
                 .onChange(of: tutorialStore.currentStep) { _, step in
                     if step == .calendar || step == .dayDetail {

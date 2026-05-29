@@ -117,6 +117,13 @@ export const syncTransactions = async (req: Request, res: Response) => {
       // Plaid returns date-only strings - use noon to avoid timezone shifts
       const txDate = new Date(pt.date + "T12:00:00");
 
+      // 내부 이체(카드값 납부, 계좌 간 이체 등) 건너뛰기
+      if (plaidDetailedCategory?.startsWith('TRANSFER_') ||
+          plaidDetailedCategory?.startsWith('LOAN_PAYMENTS_CREDIT_CARD') ||
+          plaidDetailedCategory?.startsWith('BANK_FEES_')) {
+        continue;
+      }
+
       // pending→posted 전환 시 같은 거래가 다른 ID로 중복 유입 방지
       const duplicate = await prisma.transaction.findFirst({
         where: {
