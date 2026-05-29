@@ -102,7 +102,8 @@ export const syncTransactions = async (req: Request, res: Response) => {
       const type = isExpense ? TransactionType.EXPENSE : TransactionType.INCOME;
       const plaidDetailedCategory = pt.personal_finance_category?.detailed;
       const amountCents = Math.round(Math.abs(pt.amount) * 100);
-      const txDate = new Date(pt.date);
+      // Plaid returns date-only strings - use noon to avoid timezone shifts
+      const txDate = new Date(pt.date + "T12:00:00");
 
       // pending→posted 전환 시 같은 거래가 다른 ID로 중복 유입 방지
       const duplicate = await prisma.transaction.findFirst({
@@ -130,7 +131,7 @@ export const syncTransactions = async (req: Request, res: Response) => {
             amountCents: amountCents,
             type: type,
             category: mapPlaidCategory(plaidDetailedCategory),
-            occurredAt: new Date(pt.date),
+            occurredAt: txDate,
           }
         });
       if (result.plaidTxnId) addedCount++;

@@ -60,7 +60,7 @@ export async function getDashboardData(req: Request, res: Response) {
         spent: goal.currentSpentCents,
         remainingAmount,
         remainingPct: Math.round(Math.min(100, Math.max(0, rawPct))),
-        isOverBudget: goal.currentSpentCents > goal.monthlyBudgetCents
+        isOverBudget: goal.currentSpentCents > goal.monthlyBudgetCents && goal.monthlyBudgetCents > 0
       };
     });
 
@@ -160,17 +160,16 @@ export const updateUserBudgets = async (userId: string) => {
   let updatedCount = 0;
 
   for (const goal of activeGoals) {
-    const spending = await prisma.transaction.aggregate({
+    const expense = await prisma.transaction.aggregate({
       _sum: { amountCents: true },
-      where: {
-        userId: userId,
-        category: goal.category, 
-        type: TransactionType.EXPENSE,
-        occurredAt: { gte: goal.startDate, lte: goal.endDate }
-      }
+      where: { userId, category: goal.category, type: TransactionType.EXPENSE, occurredAt: { gte: goal.startDate, lte: goal.endDate } }
+    });
+    const income = await prisma.transaction.aggregate({
+      _sum: { amountCents: true },
+      where: { userId, category: goal.category, type: TransactionType.INCOME, occurredAt: { gte: goal.startDate, lte: goal.endDate } }
     });
 
-    const totalSpent = spending._sum.amountCents || 0;
+    const totalSpent = Math.max(0, (expense._sum.amountCents || 0) - (income._sum.amountCents || 0));
 
     await prisma.goal.update({
       where: { id: goal.id },

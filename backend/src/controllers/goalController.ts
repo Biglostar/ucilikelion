@@ -34,7 +34,7 @@ export async function getGoals(req: Request, res: Response) {
       const spentPct = Math.max(0, spentPctRaw);
 
       const remainingPct = Math.max(0, 100 - spentPct);
-      const overBudget = g.currentSpentCents >= budget;
+      const overBudget = g.currentSpentCents > budget;
 
     return {
       ...g,
@@ -81,7 +81,7 @@ export async function createGoal(req: Request, res: Response) {
       const values = Object.values(monthTotals).filter(v => v > 0);
       monthlyBudgetCents = values.length > 0
         ? Math.floor(values.reduce((a, b) => a + b, 0) / values.length)
-        : 100000; // 데이터 없으면 기본 $1,000
+        : monthlyBudgetCents || 0; // 데이터 없으면 프론트에서 전달한 값 사용, 없으면 0
     }
 
     const now = new Date();

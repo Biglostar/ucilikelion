@@ -63,6 +63,7 @@ struct RootTabView: View {
         }
         .onChange(of: tutorialStore.isActive) { _, active in
             goalsStore.isTutorialMode = active
+            if !active { withAnimation { selectedTab = 0 } }
         }
         .onChange(of: settingsStore.settings.userEmail) { _, email in
             // 로그인 완료 시 올바른 userId로 데이터 재로드
