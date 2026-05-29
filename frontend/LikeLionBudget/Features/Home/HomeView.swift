@@ -42,6 +42,7 @@ struct HomeView: View {
                     homeScrollContent
                 }
                 .refreshable {
+                    try? await APIClient().syncPlaid()
                     try? await APIClient().refreshCharacterMessage()
                     store.reload()
                     loadDashboard()
