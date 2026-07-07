@@ -22,6 +22,11 @@ export function determineStatus(totalRemainingPct: number): "RICH" | "STABLE" | 
   }
 }
 
+// 목표 기간(해당 월) 밖의 거래는 게이지에 반영하지 않음
+function isWithinGoalPeriod(goal: { startDate: Date; endDate: Date }, date: Date) {
+  return date >= goal.startDate && date <= goal.endDate;
+}
+
 function getNaggingCheckpoint(lastAlertPct: number, remainingPct: number) {
   const checkpoints = [100, 75, 50, 25, 10, 0];
   const crossed = checkpoints
@@ -106,7 +111,7 @@ export async function createTransaction(req: Request, res: Response) {
         where: { userId, category, status: "ACTIVE" },
         orderBy: { isSelected: "desc" },
       });
-      if (offsetGoal) {
+      if (offsetGoal && isWithinGoalPeriod(offsetGoal, dateObj)) {
         await tx.goal.update({
           where: { id: offsetGoal.id },
           data: { currentSpentCents: Math.max(0, offsetGoal.currentSpentCents - amountCents) },
@@ -131,7 +136,7 @@ export async function createTransaction(req: Request, res: Response) {
   let naggingMessage = "";
   let shouldNotifyPush = false;
 
-if (goal) {
+if (goal && isWithinGoalPeriod(goal, dateObj)) {
   const newGoalSpent = goal.currentSpentCents + amountCents;
   const goalRemainingPct = ((goal.monthlyBudgetCents - newGoalSpent) / goal.monthlyBudgetCents) * 100;
   
@@ -246,7 +251,7 @@ export async function updateTransaction(req: Request, res: Response) {
         where: { userId, category: existing.category, status: "ACTIVE" },
         orderBy: { isSelected: "desc" },
       });
-      if (oldGoal) {
+      if (oldGoal && isWithinGoalPeriod(oldGoal, existing.occurredAt)) {
         const revert = existing.type === "EXPENSE"
           ? Math.max(0, oldGoal.currentSpentCents - existing.amountCents)   // undo expense
           : oldGoal.currentSpentCents + existing.amountCents;               // undo income offset
@@ -257,7 +262,7 @@ export async function updateTransaction(req: Request, res: Response) {
         where: { userId, category: newCategory, status: "ACTIVE" },
         orderBy: { isSelected: "desc" },
       });
-      if (newGoal) {
+      if (newGoal && isWithinGoalPeriod(newGoal, newOccurredAt)) {
         const fresh = await tx.goal.findUnique({ where: { id: newGoal.id } });
         const apply = newType === "EXPENSE"
           ? fresh!.currentSpentCents + newAmountCents                        // add expense
@@ -312,7 +317,7 @@ export async function deleteTransaction(req: Request, res: Response) {
         where: { userId, category: existing.category, status: "ACTIVE" },
         orderBy: { isSelected: "desc" },
       });
-      if (goal) {
+      if (goal && isWithinGoalPeriod(goal, existing.occurredAt)) {
         const updated = existing.type === "EXPENSE"
           ? Math.max(0, goal.currentSpentCents - existing.amountCents)
           : goal.currentSpentCents + existing.amountCents;

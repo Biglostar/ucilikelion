@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from "../prisma";
 import { generateAiBudgetAnalysis } from '../services/aiService';
-import { updateUserBudgets } from './dashboardController';
+import { updateUserBudgets, rolloverStaleGoals, currentMonthRange } from './dashboardController';
 import { TransactionType } from '@prisma/client';
 // import { generateAiBudgetAnalysis } from '../services/aiService';
 // import { TransactionType } from '@prisma/client';
@@ -12,6 +12,9 @@ export async function getGoals(req: Request, res: Response) {
     if (!userId) {
       return res.status(400).json({ error: "Missing x-user-id header" });
     }
+
+    // 달이 바뀌었으면 목표 기간/게이지를 이번 달 기준으로 재계산
+    await rolloverStaleGoals(userId);
 
     const goals = await prisma.goal.findMany({
       where: { userId },
@@ -84,9 +87,7 @@ export async function createGoal(req: Request, res: Response) {
         : monthlyBudgetCents || 0; // 데이터 없으면 프론트에서 전달한 값 사용, 없으면 0
     }
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const { start: startOfMonth, end: endOfMonth } = currentMonthRange();
 
     const goal = await prisma.goal.create({
       data: {
@@ -104,17 +105,28 @@ export async function createGoal(req: Request, res: Response) {
       }
     });
 
-    // 목표 생성 후 이번 달 해당 카테고리 지출 즉시 계산
-    const spent = await prisma.transaction.aggregate({
-      _sum: { amountCents: true },
-      where: {
-        userId,
-        category,
-        type: TransactionType.EXPENSE,
-        occurredAt: { gte: startOfMonth, lte: endOfMonth }
-      }
-    });
-    const currentSpent = spent._sum.amountCents || 0;
+    // 목표 생성 후 이번 달 해당 카테고리 지출 즉시 계산 (n빵 등 수입은 차감)
+    const [spent, received] = await Promise.all([
+      prisma.transaction.aggregate({
+        _sum: { amountCents: true },
+        where: {
+          userId,
+          category,
+          type: TransactionType.EXPENSE,
+          occurredAt: { gte: startOfMonth, lte: endOfMonth }
+        }
+      }),
+      prisma.transaction.aggregate({
+        _sum: { amountCents: true },
+        where: {
+          userId,
+          category,
+          type: TransactionType.INCOME,
+          occurredAt: { gte: startOfMonth, lte: endOfMonth }
+        }
+      })
+    ]);
+    const currentSpent = Math.max(0, (spent._sum.amountCents || 0) - (received._sum.amountCents || 0));
     if (currentSpent > 0) {
       await prisma.goal.update({
         where: { id: goal.id },

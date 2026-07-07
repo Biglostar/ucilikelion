@@ -13,7 +13,8 @@ export async function getDashboardData(req: Request, res: Response) {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
 
-
+    // 달이 바뀌었으면 목표 기간/게이지를 이번 달 기준으로 재계산
+    await rolloverStaleGoals(userId);
 
     // 1. 지난 3개월의 월 정보 계산
     const [user, goals, currentMonthSummary] = await Promise.all([
@@ -180,9 +181,54 @@ export const recalculateBudgets = async (userId: string) => {
   }
 };
 
+// 이번 달 기간. endDate는 말일 23:59:59.999 — 말일 낮에 찍힌 거래도 포함되도록
+export const currentMonthRange = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { start, end };
+};
+
+// 달이 바뀐 ACTIVE 목표를 이번 달 기간으로 옮기고 지출을 재계산 (지출 − 수입)
+// cron 없이도 대시보드/목표 조회 시마다 호출되어 자동 복구됨
+export const rolloverStaleGoals = async (userId: string) => {
+  const { start, end } = currentMonthRange();
+  const staleGoals = await prisma.goal.findMany({
+    where: { userId, status: 'ACTIVE', endDate: { lt: start } }
+  });
+
+  for (const goal of staleGoals) {
+    const [expense, income] = await Promise.all([
+      prisma.transaction.aggregate({
+        _sum: { amountCents: true },
+        where: { userId, category: goal.category, type: TransactionType.EXPENSE, occurredAt: { gte: start, lte: end } }
+      }),
+      prisma.transaction.aggregate({
+        _sum: { amountCents: true },
+        where: { userId, category: goal.category, type: TransactionType.INCOME, occurredAt: { gte: start, lte: end } }
+      })
+    ]);
+    const totalSpent = Math.max(0, (expense._sum.amountCents || 0) - (income._sum.amountCents || 0));
+
+    await prisma.goal.update({
+      where: { id: goal.id },
+      data: {
+        startDate: start,
+        endDate: end,
+        currentSpentCents: totalSpent,
+        lastAlertPct: 100
+      }
+    });
+  }
+
+  return staleGoals.length;
+};
+
 // --- REUSABLE HELPER FUNCTION ---
 // This handles the math and database updates, without needing req/res!
 export const updateUserBudgets = async (userId: string) => {
+  await rolloverStaleGoals(userId);
+
   const activeGoals = await prisma.goal.findMany({
     where: { userId: userId, status: 'ACTIVE' }
   });
