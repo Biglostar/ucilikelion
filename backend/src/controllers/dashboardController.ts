@@ -13,8 +13,6 @@ export async function getDashboardData(req: Request, res: Response) {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
 
-
-
     // 1. 지난 3개월의 월 정보 계산
     const [user, goals, currentMonthSummary] = await Promise.all([
       prisma.user.findUnique({ 

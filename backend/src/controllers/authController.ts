@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import { prisma } from '../prisma';
+import { signUserToken } from '../middleware/auth';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -29,7 +30,9 @@ export async function googleLogin(req: Request, res: Response) {
       },
     });
 
-    return res.json({ user, message: "Login successful" });
+    const token = signUserToken(user.id);
+
+    return res.json({ user, token, message: "Login successful" });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Google Auth Failed" });
