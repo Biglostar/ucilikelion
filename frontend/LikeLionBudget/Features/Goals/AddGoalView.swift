@@ -207,9 +207,7 @@ struct AddGoalView: View {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
 
-        let status = memo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "\(category.displayNameKR) 목표 추가됨"
-            : memo
+        let status = memo.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if let existing = editingGoal {
             let updated = Goal(
