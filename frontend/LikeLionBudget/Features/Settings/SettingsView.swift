@@ -416,6 +416,7 @@ struct PersonalInfoView: View {
                 try await APIClient().deleteAccount()
                 await MainActor.run {
                     UserIdentity.clearBackendUserId()
+                    AuthToken.clear()
                     UserDefaults.standard.removeObject(forKey: "tutorial_hasCompleted_v1")
                     settings.settings = AppSettings(
                         privacyLowMode: true,
