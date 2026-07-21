@@ -22,7 +22,9 @@ struct LikeLionBudgetApp: App {
         if let clientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String {
             GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
         }
-        FirebaseApp.configure()
+        if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+            FirebaseApp.configure()
+        }
     }
 
     var body: some Scene {
