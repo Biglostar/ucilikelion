@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { prisma } from '../prisma';
 
 let firebaseInitialized = false;
 
@@ -34,12 +35,19 @@ export async function sendPushNotification(deviceToken: string, title: string, b
     return null;
   }
 
-  const message = {
+  const message: admin.messaging.Message = {
     notification: { title, body },
     token: deviceToken,
     data: {
-      click_action: "FLUTTER_NOTIFICATION_CLICK",
       type: "ROAST_MESSAGE"
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: "default",
+          badge: 1
+        }
+      }
     }
   };
 
@@ -48,7 +56,16 @@ export async function sendPushNotification(deviceToken: string, title: string, b
     console.log('푸시 알림 발송 성공:', response);
     return response;
   } catch (error) {
-    console.error('푸시 알림 발송 실패:', error);
+    const code = (error as { code?: string }).code;
+    if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token') {
+      console.warn('[Firebase] 무효 토큰 감지, DB에서 제거:', deviceToken);
+      await prisma.user.updateMany({
+        where: { fcmToken: deviceToken },
+        data: { fcmToken: null }
+      }).catch(e => console.error('무효 토큰 제거 실패:', e));
+    } else {
+      console.error('푸시 알림 발송 실패:', error);
+    }
     throw error;
   }
 }

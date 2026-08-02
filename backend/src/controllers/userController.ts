@@ -17,7 +17,6 @@ export async function deleteAccount(req: Request, res: Response) {
       try {
         await plaidClient.itemRemove({ access_token: user.plaidAccessToken });
       } catch (plaidError) {
-        // Don't block account deletion on a Plaid-side failure
         console.error("Plaid item removal failed during account deletion:", plaidError);
       }
     }
