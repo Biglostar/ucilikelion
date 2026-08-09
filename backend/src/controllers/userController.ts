@@ -1,11 +1,25 @@
 import { Request, Response } from "express";
 import { RoastLevel } from "@prisma/client";
 import { prisma } from "../prisma";
+import { plaidClient } from "../services/plaidService";
 
 export async function deleteAccount(req: Request, res: Response) {
   try {
     const userId = req.header("x-user-id");
     if (!userId) return res.status(400).json({ error: "Missing x-user-id" });
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { plaidAccessToken: true },
+    });
+
+    if (user?.plaidAccessToken) {
+      try {
+        await plaidClient.itemRemove({ access_token: user.plaidAccessToken });
+      } catch (plaidError) {
+        console.error("Plaid item removal failed during account deletion:", plaidError);
+      }
+    }
 
     await prisma.monthlySummary.deleteMany({ where: { userId } });
     await prisma.report.deleteMany({ where: { userId } });

@@ -12,6 +12,7 @@ import plaidRoutes from './routes/plaidRoutes';
 import userRoutes from "./routes/userRoutes";
 import reportRoutes from "./routes/reportRoutes";
 import authRoutes from "./routes/authRoutes";
+import { resolveUserId } from "./middleware/auth";
 
 
 const app = express();
@@ -20,6 +21,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors()); // Allow frontend requests
 app.use(express.json()); // Allow us to read JSON in requests
+app.use(resolveUserId); // Verifies Authorization: Bearer <jwt> when present, else falls back to raw x-user-id
 
 
 // --- Register Routes ---
