@@ -41,6 +41,12 @@ struct HomeView: View {
                 ScrollView {
                     homeScrollContent
                 }
+                .refreshable {
+                    try? await APIClient().syncPlaid()
+                    try? await APIClient().refreshCharacterMessage()
+                    store.reload()
+                    loadDashboard()
+                }
                 .onChange(of: tutorialStore.currentStep) { _, step in
                     if step == .calendar || step == .dayDetail {
                         withAnimation(.easeInOut(duration: 0.4)) {

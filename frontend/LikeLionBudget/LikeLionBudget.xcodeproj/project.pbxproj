@@ -33,6 +33,7 @@
 		B0FA951A2F219906009D6BDB /* GoalsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95192F219906009D6BDB /* GoalsListView.swift */; };
 		B0FA951C2F219AB0009D6BDB /* AddGoalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA951B2F219AB0009D6BDB /* AddGoalView.swift */; };
 		B0FA951E2F219F1B009D6BDB /* GoalsPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA951D2F219F1B009D6BDB /* GoalsPickerSheet.swift */; };
+		AA000001000000000000AA01 /* GoalDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001000000000000AA00 /* GoalDetailSheet.swift */; };
 		B0FA95282F22C6DD009D6BDB /* SpendProgressCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95272F22C6DD009D6BDB /* SpendProgressCard.swift */; };
 		B0FA952A2F22C9AD009D6BDB /* View+CardStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA95292F22C9A7009D6BDB /* View+CardStyle.swift */; };
 		B0FA952C2F28A853009D6BDB /* RecurringDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FA952B2F28A853009D6BDB /* RecurringDetector.swift */; };
@@ -81,6 +82,7 @@
 		B0FA95192F219906009D6BDB /* GoalsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsListView.swift; sourceTree = "<group>"; };
 		B0FA951B2F219AB0009D6BDB /* AddGoalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddGoalView.swift; sourceTree = "<group>"; };
 		B0FA951D2F219F1B009D6BDB /* GoalsPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsPickerSheet.swift; sourceTree = "<group>"; };
+		AA000001000000000000AA00 /* GoalDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalDetailSheet.swift; sourceTree = "<group>"; };
 		B0FA95272F22C6DD009D6BDB /* SpendProgressCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendProgressCard.swift; sourceTree = "<group>"; };
 		B0FA95292F22C9A7009D6BDB /* View+CardStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+CardStyle.swift"; sourceTree = "<group>"; };
 		B0FA952B2F28A853009D6BDB /* RecurringDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringDetector.swift; sourceTree = "<group>"; };
@@ -258,6 +260,7 @@
 				B0FA95192F219906009D6BDB /* GoalsListView.swift */,
 				B0FA951B2F219AB0009D6BDB /* AddGoalView.swift */,
 				B0FA951D2F219F1B009D6BDB /* GoalsPickerSheet.swift */,
+				AA000001000000000000AA00 /* GoalDetailSheet.swift */,
 			);
 			path = Goals;
 			sourceTree = "<group>";
@@ -393,6 +396,7 @@
 				B0FA95642F2FDEB5009D6BDB /* FrequentCategoryPicker.swift in Sources */,
 				B0B398CB2F178303000E1463 /* DayCellView.swift in Sources */,
 				B0FA951C2F219AB0009D6BDB /* AddGoalView.swift in Sources */,
+				AA000001000000000000AA01 /* GoalDetailSheet.swift in Sources */,
 				B0FA954C2F2EFF66009D6BDB /* BubbleSafeView.swift in Sources */,
 				B0B398CF2F178B83000E1463 /* Money.swift in Sources */,
 				B0FA95562F2F2B07009D6BDB /* Theme.swift in Sources */,

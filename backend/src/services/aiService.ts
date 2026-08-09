@@ -160,6 +160,15 @@ export async function generateMonthlyReport(userId: string) {
     ? ((expense / income) * 100).toFixed(0) 
     : (expense > 0 ? "100 이상" : "0");
 
+  const angles = [
+    `수입 대비 지출 비율(${expenseRatio}%)에 집중해서 저축률이 처참하다고 한탄`,
+    `이번 달 지출 $${expense}이 얼마나 비현실적인지 구체적인 비유로 비교 (예: 그 돈으로 뭘 살 수 있었는지)`,
+    `소비 패턴이 미래에 어떤 결과를 낳을지 극적으로 경고`,
+    `수입 $${income} 중 $${expense}를 쓴 것에 대해 칭찬인 척 하다가 완전 역전 비꼬기`,
+    `이 소비 습관으로 노후 준비가 얼마나 망했는지 직격`,
+  ];
+  const angle = angles[Math.floor(Math.random() * angles.length)];
+
   const prompt = `
     당신은 사용자의 소비 습관을 비웃는 냉소적인 자산관리사입니다.
     사용자의 Roast Level은 '${user.roastLevel}'입니다. 이 강도에 맞춰서 아주 직설적인 반말로 말하세요.
@@ -173,11 +182,12 @@ export async function generateMonthlyReport(userId: string) {
     - 지출: $${expense}
     - 수입 대비 지출 비율: ${expenseRatio}%
 
+    [이번 총평 각도] ${angle}
+
     [작성 조건]
-    1. 반드시 수입($${income})과 지출($${expense}) 금액을 직접 언급할 것.
-    2. 수입의 ${expenseRatio}%를 써버렸다는 사실을 콕 집어서 한심해할 것.
-    3. 3~4문장 내외로 짧고 굵게 뼈를 때리는 잔소리를 할 것.
-    4. 저축 또는 생산적 소비를 좀 하라는 압박으로 마무리할 것.
+    1. 위의 각도로 3~4문장 내외로 짧고 굵게 작성할 것.
+    2. 수치($${income}, $${expense}, ${expenseRatio}%)를 자연스럽게 녹여낼 것.
+    3. 매번 다른 표현, 비유, 어투로 써서 반복감 없게 할 것.
   `;
 
   try {

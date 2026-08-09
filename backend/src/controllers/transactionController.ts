@@ -22,6 +22,11 @@ export function determineStatus(totalRemainingPct: number): "RICH" | "STABLE" | 
   }
 }
 
+// 목표 기간(해당 월) 밖의 거래는 게이지에 반영하지 않음
+function isWithinGoalPeriod(goal: { startDate: Date; endDate: Date }, date: Date) {
+  return date >= goal.startDate && date <= goal.endDate;
+}
+
 function getNaggingCheckpoint(lastAlertPct: number, remainingPct: number) {
   const checkpoints = [100, 75, 50, 25, 10, 0];
   const crossed = checkpoints
@@ -100,6 +105,18 @@ export async function createTransaction(req: Request, res: Response) {
         update: { totalIncomeCents: { increment: amountCents } },
         create: { userId, year, month, totalIncomeCents: amountCents },
       });
+      // If this income belongs to a goal category (e.g. friends paying back their share),
+      // reduce the goal's spending so the gauge reflects the real net cost.
+      const offsetGoal = await tx.goal.findFirst({
+        where: { userId, category, status: "ACTIVE" },
+        orderBy: { isSelected: "desc" },
+      });
+      if (offsetGoal && isWithinGoalPeriod(offsetGoal, dateObj)) {
+        await tx.goal.update({
+          where: { id: offsetGoal.id },
+          data: { currentSpentCents: Math.max(0, offsetGoal.currentSpentCents - amountCents) },
+        });
+      }
       return { transaction, alert: { shouldNotify: false } };
     }
 
@@ -119,7 +136,7 @@ export async function createTransaction(req: Request, res: Response) {
   let naggingMessage = "";
   let shouldNotifyPush = false;
 
-if (goal) {
+if (goal && isWithinGoalPeriod(goal, dateObj)) {
   const newGoalSpent = goal.currentSpentCents + amountCents;
   const goalRemainingPct = ((goal.monthlyBudgetCents - newGoalSpent) / goal.monthlyBudgetCents) * 100;
   
@@ -229,31 +246,28 @@ export async function updateTransaction(req: Request, res: Response) {
         },
       });
 
-      // Goal: decre old and update new
-      if (existing.type === "EXPENSE") {
-        const oldGoal = await tx.goal.findFirst({
-          where: { userId, category: existing.category, status: "ACTIVE" },
-          orderBy: { isSelected: "desc" },
-        });
-        if (oldGoal) {
-          await tx.goal.update({
-            where: { id: oldGoal.id },
-            data: { currentSpentCents: Math.max(0, oldGoal.currentSpentCents - existing.amountCents) },
-          });
-        }
+      // Goal: undo the effect of the old transaction, then apply the new one
+      const oldGoal = await tx.goal.findFirst({
+        where: { userId, category: existing.category, status: "ACTIVE" },
+        orderBy: { isSelected: "desc" },
+      });
+      if (oldGoal && isWithinGoalPeriod(oldGoal, existing.occurredAt)) {
+        const revert = existing.type === "EXPENSE"
+          ? Math.max(0, oldGoal.currentSpentCents - existing.amountCents)   // undo expense
+          : oldGoal.currentSpentCents + existing.amountCents;               // undo income offset
+        await tx.goal.update({ where: { id: oldGoal.id }, data: { currentSpentCents: revert } });
       }
-      if (newType === "EXPENSE") {
-        const newGoal = await tx.goal.findFirst({
-          where: { userId, category: newCategory, status: "ACTIVE" },
-          orderBy: { isSelected: "desc" },
-        });
-        if (newGoal) {
-          const freshGoal = await tx.goal.findUnique({ where: { id: newGoal.id } });
-          await tx.goal.update({
-            where: { id: newGoal.id },
-            data: { currentSpentCents: (freshGoal!.currentSpentCents) + newAmountCents },
-          });
-        }
+
+      const newGoal = await tx.goal.findFirst({
+        where: { userId, category: newCategory, status: "ACTIVE" },
+        orderBy: { isSelected: "desc" },
+      });
+      if (newGoal && isWithinGoalPeriod(newGoal, newOccurredAt)) {
+        const fresh = await tx.goal.findUnique({ where: { id: newGoal.id } });
+        const apply = newType === "EXPENSE"
+          ? fresh!.currentSpentCents + newAmountCents                        // add expense
+          : Math.max(0, fresh!.currentSpentCents - newAmountCents);          // apply income offset
+        await tx.goal.update({ where: { id: newGoal.id }, data: { currentSpentCents: apply } });
       }
 
       return tx.transaction.update({
@@ -298,18 +312,19 @@ export async function deleteTransaction(req: Request, res: Response) {
         existing.type as "EXPENSE" | "INCOME"
       );
 
-      // Decrement goal spending so the progress bar stays accurate
-      if (existing.type === "EXPENSE") {
-        const goal = await tx.goal.findFirst({
-          where: { userId, category: existing.category, status: "ACTIVE" },
-          orderBy: { isSelected: "desc" },
+      // Keep goal gauge accurate: undo expense or reverse income offset
+      const goal = await tx.goal.findFirst({
+        where: { userId, category: existing.category, status: "ACTIVE" },
+        orderBy: { isSelected: "desc" },
+      });
+      if (goal && isWithinGoalPeriod(goal, existing.occurredAt)) {
+        const updated = existing.type === "EXPENSE"
+          ? Math.max(0, goal.currentSpentCents - existing.amountCents)
+          : goal.currentSpentCents + existing.amountCents;
+        await tx.goal.update({
+          where: { id: goal.id },
+          data: { currentSpentCents: updated },
         });
-        if (goal) {
-          await tx.goal.update({
-            where: { id: goal.id },
-            data: { currentSpentCents: Math.max(0, goal.currentSpentCents - existing.amountCents) },
-          });
-        }
       }
     }, { timeout: 20000 });
 

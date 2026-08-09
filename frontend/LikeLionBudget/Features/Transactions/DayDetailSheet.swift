@@ -209,14 +209,9 @@ struct DayDetailSheet: View {
                 .frame(width: Theme.listIconSize, height: Theme.listIconSize)
                 .background(Color.white.opacity(0.7))
                 .clipShape(RoundedRectangle(cornerRadius: Theme.cardCorner, style: .continuous))
-            VStack(alignment: .leading, spacing: Theme.spacingTight) {
-                Text(displayName)
-                    .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
-                    .foregroundStyle(Theme.text)
-                Text(timeText(tx.date))
-                    .font(.custom(Theme.fontLaundry, size: Theme.captionSmallSize))
-                    .foregroundStyle(Theme.text.opacity(0.65))
-            }
+            Text(displayName)
+                .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
+                .foregroundStyle(Theme.text)
             Spacer()
             VStack(alignment: .trailing, spacing: Theme.spacingTight) {
                 Text(Money.usdSignedString(fromCents: tx.amountCents))

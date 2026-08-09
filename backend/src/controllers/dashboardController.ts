@@ -13,6 +13,9 @@ export async function getDashboardData(req: Request, res: Response) {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
 
+    // 달이 바뀌었으면 목표 기간/게이지를 이번 달 기준으로 재계산
+    await rolloverStaleGoals(userId);
+
     // 1. 지난 3개월의 월 정보 계산
     const [user, goals, currentMonthSummary] = await Promise.all([
       prisma.user.findUnique({ 
@@ -58,7 +61,7 @@ export async function getDashboardData(req: Request, res: Response) {
         spent: goal.currentSpentCents,
         remainingAmount,
         remainingPct: Math.round(Math.min(100, Math.max(0, rawPct))),
-        isOverBudget: goal.currentSpentCents > goal.monthlyBudgetCents
+        isOverBudget: goal.currentSpentCents > goal.monthlyBudgetCents && goal.monthlyBudgetCents > 0
       };
     });
 
@@ -78,6 +81,36 @@ export async function getDashboardData(req: Request, res: Response) {
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Failed to fetch dashboard data" });
+  }
+}
+
+// 말풍선 멘트 새로 생성
+export async function refreshCharacterMessage(req: Request, res: Response) {
+  try {
+    const userId = req.header("x-user-id");
+    if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { characterStatus: true, roastLevel: true, totalMonthlyBudgetCents: true }
+    });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const now = new Date();
+    const summary = await prisma.monthlySummary.findUnique({
+      where: { userId_year_month: { userId, year: now.getFullYear(), month: now.getMonth() + 1 } }
+    });
+    const totalSpent = summary?.totalSpentCents ?? 0;
+    const budget = user.totalMonthlyBudgetCents || 1;
+    const remainingPct = Math.floor(((budget - totalSpent) / budget) * 100);
+
+    const newMessage = await generateNaggingMessage("monthly_progress", remainingPct, user.roastLevel);
+    await prisma.user.update({ where: { id: userId }, data: { characterMessage: newMessage } });
+
+    return res.json({ bubbleText: newMessage });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Failed to refresh message" });
   }
 }
 
@@ -148,9 +181,54 @@ export const recalculateBudgets = async (userId: string) => {
   }
 };
 
+// 이번 달 기간. endDate는 말일 23:59:59.999 — 말일 낮에 찍힌 거래도 포함되도록
+export const currentMonthRange = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { start, end };
+};
+
+// 달이 바뀐 ACTIVE 목표를 이번 달 기간으로 옮기고 지출을 재계산 (지출 − 수입)
+// cron 없이도 대시보드/목표 조회 시마다 호출되어 자동 복구됨
+export const rolloverStaleGoals = async (userId: string) => {
+  const { start, end } = currentMonthRange();
+  const staleGoals = await prisma.goal.findMany({
+    where: { userId, status: 'ACTIVE', endDate: { lt: start } }
+  });
+
+  for (const goal of staleGoals) {
+    const [expense, income] = await Promise.all([
+      prisma.transaction.aggregate({
+        _sum: { amountCents: true },
+        where: { userId, category: goal.category, type: TransactionType.EXPENSE, occurredAt: { gte: start, lte: end } }
+      }),
+      prisma.transaction.aggregate({
+        _sum: { amountCents: true },
+        where: { userId, category: goal.category, type: TransactionType.INCOME, occurredAt: { gte: start, lte: end } }
+      })
+    ]);
+    const totalSpent = Math.max(0, (expense._sum.amountCents || 0) - (income._sum.amountCents || 0));
+
+    await prisma.goal.update({
+      where: { id: goal.id },
+      data: {
+        startDate: start,
+        endDate: end,
+        currentSpentCents: totalSpent,
+        lastAlertPct: 100
+      }
+    });
+  }
+
+  return staleGoals.length;
+};
+
 // --- REUSABLE HELPER FUNCTION ---
 // This handles the math and database updates, without needing req/res!
 export const updateUserBudgets = async (userId: string) => {
+  await rolloverStaleGoals(userId);
+
   const activeGoals = await prisma.goal.findMany({
     where: { userId: userId, status: 'ACTIVE' }
   });
@@ -158,17 +236,16 @@ export const updateUserBudgets = async (userId: string) => {
   let updatedCount = 0;
 
   for (const goal of activeGoals) {
-    const spending = await prisma.transaction.aggregate({
+    const expense = await prisma.transaction.aggregate({
       _sum: { amountCents: true },
-      where: {
-        userId: userId,
-        category: goal.category, 
-        type: TransactionType.EXPENSE,
-        occurredAt: { gte: goal.startDate, lte: goal.endDate }
-      }
+      where: { userId, category: goal.category, type: TransactionType.EXPENSE, occurredAt: { gte: goal.startDate, lte: goal.endDate } }
+    });
+    const income = await prisma.transaction.aggregate({
+      _sum: { amountCents: true },
+      where: { userId, category: goal.category, type: TransactionType.INCOME, occurredAt: { gte: goal.startDate, lte: goal.endDate } }
     });
 
-    const totalSpent = spending._sum.amountCents || 0;
+    const totalSpent = Math.max(0, (expense._sum.amountCents || 0) - (income._sum.amountCents || 0));
 
     await prisma.goal.update({
       where: { id: goal.id },

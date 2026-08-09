@@ -77,8 +77,8 @@ struct ContentView: View {
                 .onDisappear {
                     showLoginSheet = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        // 이미 Plaid 연결됨(로그아웃 후 재로그인 등)이면 Plaid 시트를 띄우지 않음
-                        guard !settingsStore.settings.plaidConnected else { return }
+                        guard !settingsStore.settings.plaidConnected,
+                              !settingsStore.settings.hasCompletedTermsAndPlaidOnce else { return }
                         showPlaidSheet = true
                     }
                 }

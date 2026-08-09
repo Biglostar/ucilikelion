@@ -81,20 +81,32 @@ export const syncTransactions = async (req: Request, res: Response) => {
       console.log(`[Plaid Sync] transactionsRefresh skipped: ${code}`);
     }
 
-    // Fetch last 90 days
+    // Fetch last 180 days with pagination
     console.log(`[Plaid Sync] Calling transactionsGet...`);
     const now = new Date();
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(now.getDate() - 90);
+    const startDate = new Date();
+    startDate.setDate(now.getDate() - 180);
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = now.toISOString().split('T')[0];
 
-    const response = await plaidClient.transactionsGet({
-      access_token: user.plaidAccessToken,
-      start_date: ninetyDaysAgo.toISOString().split('T')[0],
-      end_date: now.toISOString().split('T')[0],
-    });
-    console.log(`[Plaid Sync] Got ${response.data.transactions.length} transactions`);
+    const allTransactions: any[] = [];
+    let offset = 0;
+    const pageSize = 500;
+    while (true) {
+      const response = await plaidClient.transactionsGet({
+        access_token: user.plaidAccessToken,
+        start_date: startDateStr,
+        end_date: endDateStr,
+        options: { count: pageSize, offset }
+      });
+      allTransactions.push(...response.data.transactions);
+      const total = response.data.total_transactions;
+      offset += response.data.transactions.length;
+      if (offset >= total) break;
+    }
+    console.log(`[Plaid Sync] Got ${allTransactions.length} transactions`);
 
-    const transactions = response.data.transactions;
+    const transactions = allTransactions;
     let addedCount = 0;
 
     for (const pt of transactions) {
@@ -102,7 +114,15 @@ export const syncTransactions = async (req: Request, res: Response) => {
       const type = isExpense ? TransactionType.EXPENSE : TransactionType.INCOME;
       const plaidDetailedCategory = pt.personal_finance_category?.detailed;
       const amountCents = Math.round(Math.abs(pt.amount) * 100);
-      const txDate = new Date(pt.date);
+      // Plaid returns date-only strings - use noon to avoid timezone shifts
+      const txDate = new Date(pt.date + "T12:00:00");
+
+      // 내부 이체(카드값 납부, 계좌 간 이체 등) 건너뛰기
+      if (plaidDetailedCategory?.startsWith('TRANSFER_') ||
+          plaidDetailedCategory?.startsWith('LOAN_PAYMENTS_CREDIT_CARD') ||
+          plaidDetailedCategory?.startsWith('BANK_FEES_')) {
+        continue;
+      }
 
       // pending→posted 전환 시 같은 거래가 다른 ID로 중복 유입 방지
       const duplicate = await prisma.transaction.findFirst({
@@ -130,7 +150,7 @@ export const syncTransactions = async (req: Request, res: Response) => {
             amountCents: amountCents,
             type: type,
             category: mapPlaidCategory(plaidDetailedCategory),
-            occurredAt: new Date(pt.date),
+            occurredAt: txDate,
           }
         });
       if (result.plaidTxnId) addedCount++;

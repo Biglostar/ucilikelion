@@ -32,6 +32,14 @@ enum AppFormatters {
         return f
     }()
 
+    /// "M월 d일 HH:mm" — 목표 거래내역용
+    static let shortDateTime: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "M월 d일 HH:mm"
+        return f
+    }()
+
     /// "yyyy-MM-dd" — API 쿼리 파라미터용
     static let apiDate: DateFormatter = {
         let f = DateFormatter()

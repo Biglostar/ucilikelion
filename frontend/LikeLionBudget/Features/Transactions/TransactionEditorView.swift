@@ -191,14 +191,14 @@ struct TransactionEditorView: View {
     @ViewBuilder
     private func dateTimeBlock() -> some View {
         VStack(alignment: .leading, spacing: Theme.spacingCompact) {
-            Text("날짜 · 시간")
+            Text("날짜")
                 .font(.custom(Theme.fontLaundry, size: Theme.bodySize))
                 .foregroundStyle(Theme.text)
 
             DatePicker(
                 "",
                 selection: $date,
-                displayedComponents: [.date, .hourAndMinute]
+                displayedComponents: [.date]
             )
             .datePickerStyle(.compact)
         }

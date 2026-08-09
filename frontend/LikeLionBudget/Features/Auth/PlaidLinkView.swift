@@ -125,6 +125,8 @@ struct PlaidLinkView: SwiftUI.View {
                 let client = APIClient()
                 try await client.exchangePlaidPublicToken(publicToken)
                 try? await client.syncPlaid()
+                // DB 쓰기 완료 대기
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await MainActor.run {
                     NotificationCenter.default.post(name: .plaidDidSync, object: nil)
                     settingsStore?.setPlaidConnected(true)

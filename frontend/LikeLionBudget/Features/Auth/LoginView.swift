@@ -231,6 +231,7 @@ struct LoginView: View {
                     do {
                         let response = try await APIClient().googleLogin(idToken: token)
                         UserIdentity.setBackendUserId(response.user.id)
+                        if let jwt = response.token { AuthToken.save(jwt) }
                     } catch {
                         // Backend auth failure is non-fatal — continue with local session
                     }

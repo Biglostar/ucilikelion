@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Security
 
 // MARK: - API Base URL
 
@@ -47,6 +48,57 @@ enum UserIdentity {
 
     static func clearBackendUserId() {
         UserDefaults.standard.removeObject(forKey: backendKey)
+    }
+}
+
+// MARK: - Auth Token (JWT, Keychain-backed)
+
+/// 로그인 시 백엔드가 발급한 JWT를 Keychain에 안전하게 보관.
+/// 매 요청에 `Authorization: Bearer <token>`으로 실림. 백엔드가 아직 토큰을
+/// 안 주면 `current`는 nil → 기존 x-user-id fallback 경로로 동작.
+enum AuthToken {
+    private static let service = "LikeLionBudget.auth"
+    private static let account = "jwt"
+
+    static var current: String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data,
+              let token = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return token
+    }
+
+    static func save(_ token: String) {
+        guard let data = token.data(using: .utf8) else { return }
+        // 기존 값이 있으면 지우고 새로 저장 (upsert)
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(base as CFDictionary)
+        var attrs = base
+        attrs[kSecValueData as String] = data
+        attrs[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        SecItemAdd(attrs as CFDictionary, nil)
+    }
+
+    static func clear() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 }
 
@@ -252,6 +304,15 @@ struct APIClient {
 
     // MARK: - Core request
 
+    /// 인증 헤더를 일괄 적용. JWT가 있으면 Bearer로, 없으면(구버전/미로그인)
+    /// 기존 x-user-id fallback으로 동작.
+    private static func applyAuthHeaders(to request: inout URLRequest) {
+        request.setValue(UserIdentity.currentUserId, forHTTPHeaderField: "x-user-id")
+        if let token = AuthToken.current {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+    }
+
     private func makeRequest(
         path: String,
         method: String,
@@ -271,7 +332,7 @@ struct APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(UserIdentity.currentUserId, forHTTPHeaderField: "x-user-id")
+        Self.applyAuthHeaders(to: &request)
 
         if let body {
             let data = try JSONEncoder().encode(AnyEncodable(body))
@@ -390,7 +451,7 @@ struct APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(UserIdentity.currentUserId, forHTTPHeaderField: "x-user-id")
+        Self.applyAuthHeaders(to: &request)
         _ = try await send(request, as: EmptyResponse.self)
     }
 
@@ -504,6 +565,12 @@ struct APIClient {
         return try await send(request, as: DashboardResponse.self)
     }
 
+    func refreshCharacterMessage() async throws -> String {
+        struct R: Codable { let bubbleText: String }
+        let request = try makeRequest(path: "dashboard/refresh-message", method: "POST")
+        return try await send(request, as: R.self).bubbleText
+    }
+
     // MARK: - Auth
 
     struct GoogleLoginRequest: Encodable {
@@ -517,6 +584,8 @@ struct APIClient {
             let nickname: String?
         }
         let user: UserInfo
+        /// 백엔드가 발급한 JWT. 아직 배포 전이면 nil → x-user-id fallback 유지.
+        let token: String?
     }
 
     func googleLogin(idToken: String) async throws -> GoogleLoginResponse {
