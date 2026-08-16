@@ -223,6 +223,7 @@ struct PersonalInfoView: View {
     @State private var showLogoutDoneAlert = false
     @State private var isDeletingAccount = false
     @State private var showDeleteErrorAlert = false
+    @State private var deleteErrorMessage = "계정 삭제 중 오류가 발생했어요. 다시 시도해주세요."
     @State private var showResetSyncAlert = false
     @State private var isResettingSync = false
     @State private var showReconnectPlaid = false
@@ -343,7 +344,7 @@ struct PersonalInfoView: View {
         .alert("계정 삭제 실패", isPresented: $showDeleteErrorAlert) {
             Button("확인") {}
         } message: {
-            Text("계정 삭제 중 오류가 발생했어요. 다시 시도해주세요.")
+            Text(deleteErrorMessage)
         }
         .alert("로그아웃되었어요", isPresented: $showLogoutDoneAlert) {
             Button("확인") {
@@ -433,6 +434,11 @@ struct PersonalInfoView: View {
             } catch {
                 await MainActor.run {
                     isDeletingAccount = false
+                    if case APIError.authRequired = error {
+                        deleteErrorMessage = "다시 로그인한 뒤 탈퇴를 진행해주세요."
+                    } else {
+                        deleteErrorMessage = "계정 삭제 중 오류가 발생했어요. 다시 시도해주세요."
+                    }
                     showDeleteErrorAlert = true
                 }
             }
