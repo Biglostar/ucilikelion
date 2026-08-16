@@ -21,6 +21,8 @@ enum APIError: Error {
     case transport(Error)
     case serverStatus(Int)
     case decoding(Error)
+    /// 로그인(JWT)이 필요한 요청인데 토큰이 없거나 만료된 경우.
+    case authRequired
 }
 
 // MARK: - User Identity (x-user-id)
@@ -618,9 +620,16 @@ struct APIClient {
         _ = try await sendData(request)
     }
 
+    /// 계정 삭제. 서버가 검증된 JWT만 받으므로 토큰이 없으면 요청 전에 중단한다.
     func deleteAccount() async throws {
+        guard AuthToken.current != nil else { throw APIError.authRequired }
         let request = try makeRequest(path: "users", method: "DELETE")
-        _ = try await sendData(request)
+        do {
+            _ = try await sendData(request)
+        } catch APIError.serverStatus(401) {
+            // 토큰 만료 → 재로그인 후 다시 시도해야 한다.
+            throw APIError.authRequired
+        }
     }
 }
 

@@ -38,6 +38,35 @@ export function resolveUserId(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+/**
+ * Strict auth guard for destructive routes.
+ *
+ * Unlike resolveUserId, this does NOT accept a raw x-user-id header: the client
+ * must present a verified "Authorization: Bearer <jwt>". Without it, anyone who
+ * knows (or guesses) a user id could wipe that account.
+ */
+export function requireVerifiedUser(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.header("authorization");
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
+
+  if (!token) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  if (!JWT_SECRET) {
+    console.error("JWT_SECRET is not set; cannot verify bearer token");
+    return res.status(500).json({ error: "Server auth misconfigured" });
+  }
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
+    req.headers["x-user-id"] = payload.userId;
+    return next();
+  } catch (error) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
 export function signUserToken(userId: string): string {
   if (!JWT_SECRET) {
     throw new Error("JWT_SECRET is not set");
