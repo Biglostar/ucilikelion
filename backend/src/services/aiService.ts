@@ -15,7 +15,7 @@ export async function generateNaggingMessage( // 월 소비
   const prompt = `
     Role: 차갑고 냉소적인 AI 재무 비서. (반말 사용)
     Context: 사용자의 '${category}' 예산이 ${checkpoint}% 남았음.
-    Roast Level: ${level} (1:약함, 2:보통, 3:매움)
+    Roast Level: ${level}
 
     [핵심 미션]
     사용자의 남은 예산(${checkpoint}%)에 따른 '거주 상태'를 독설에 섞어서 표현할 것. 
@@ -132,40 +132,72 @@ export async function generateAiBudgetAnalysis(
 }
 
 
-export async function generateMonthlyReport(userId: string) {
+export async function generateMonthlyReport(userId: string, year: number, month: number) {
 
-  // 유저 정보 & 지출, 수입 데이터 가져오기
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      monthlySummaries: {
-        orderBy: [
-          { year: 'desc' },
-          { month: 'desc' }
-        ],
-        take: 1
-      }
-    }
-  });
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
 
-  if (!user || user.monthlySummaries.length === 0) {
+  // 유저 정보, 최근 2개월 요약(추세 비교용), 카테고리별 지출, 활성 목표를 병렬 조회
+  const [user, recentSummaries, categorySpend, goals] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    prisma.monthlySummary.findMany({
+      where: { userId },
+      orderBy: [{ year: 'desc' }, { month: 'desc' }],
+      take: 2,
+    }),
+    prisma.transaction.groupBy({
+      by: ['category'],
+      where: { userId, type: 'EXPENSE', occurredAt: { gte: startDate, lte: endDate } },
+      _sum: { amountCents: true },
+      orderBy: { _sum: { amountCents: 'desc' } },
+    }),
+    prisma.goal.findMany({ where: { userId, status: 'ACTIVE' } }),
+  ]);
+
+  const summary = recentSummaries.find(s => s.year === year && s.month === month);
+
+  if (!user || !summary) {
     return "분석할 데이터가 없습니다";
   }
 
-  const summary = user.monthlySummaries[0];
   const income = summary.totalIncomeCents / 100;
   const expense = summary.totalSpentCents / 100;
-  
-  const expenseRatio = income > 0 
-    ? ((expense / income) * 100).toFixed(0) 
+
+  const expenseRatio = income > 0
+    ? ((expense / income) * 100).toFixed(0)
     : (expense > 0 ? "100 이상" : "0");
+
+  // 가장 큰 지출 카테고리
+  const topCategory = categorySpend[0];
+  const topCategoryText = topCategory
+    ? `${topCategory.category} ($${((topCategory._sum.amountCents ?? 0) / 100).toFixed(0)}, 지출의 ${Math.round(((topCategory._sum.amountCents ?? 0) / (summary.totalSpentCents || 1)) * 100)}%)`
+    : "없음";
+
+  // 전월 대비 소비 추세
+  const prevSummary = recentSummaries.find(s => !(s.year === year && s.month === month));
+  const trendText = prevSummary && prevSummary.totalSpentCents > 0
+    ? (() => {
+        const diffPct = Math.round(((summary.totalSpentCents - prevSummary.totalSpentCents) / prevSummary.totalSpentCents) * 100);
+        return diffPct >= 0 ? `전월 대비 ${diffPct}% 증가` : `전월 대비 ${Math.abs(diffPct)}% 감소`;
+      })()
+    : "전월 데이터 없음";
+
+  // 예산 달성 여부 (총예산 + 카테고리 목표)
+  const totalBudget = user.totalMonthlyBudgetCents;
+  const overBudgetGoals = goals.filter(g => g.monthlyBudgetCents > 0 && g.currentSpentCents > g.monthlyBudgetCents);
+  const budgetText = totalBudget > 0
+    ? `총예산 대비 ${Math.round((summary.totalSpentCents / totalBudget) * 100)}% 사용` +
+      (overBudgetGoals.length > 0 ? `, 초과 목표: ${overBudgetGoals.map(g => g.category).join(', ')}` : ', 목표 초과 없음')
+    : "설정된 예산 없음";
 
   const angles = [
     `수입 대비 지출 비율(${expenseRatio}%)에 집중해서 저축률이 처참하다고 한탄`,
     `이번 달 지출 $${expense}이 얼마나 비현실적인지 구체적인 비유로 비교 (예: 그 돈으로 뭘 살 수 있었는지)`,
     `소비 패턴이 미래에 어떤 결과를 낳을지 극적으로 경고`,
     `수입 $${income} 중 $${expense}를 쓴 것에 대해 칭찬인 척 하다가 완전 역전 비꼬기`,
-    `이 소비 습관으로 노후 준비가 얼마나 망했는지 직격`,
+    `최대 지출 카테고리(${topCategoryText})에 돈을 몰아 쓴 걸 집중 공격`,
+    `예산 현황(${budgetText})을 근거로 자기관리 능력을 저격`,
+    `전월 대비 소비 추세(${trendText})를 근거로 앞으로가 더 걱정된다고 비꼬기`,
   ];
   const angle = angles[Math.floor(Math.random() * angles.length)];
 
@@ -178,15 +210,16 @@ export async function generateMonthlyReport(userId: string) {
     3. SPICY: "경제관념 가출함? 엿바꿔먹음?", "ㅅ1ㅂㅅㄲ야 돌았냐? 커피에 돈을 얼마나 쳐 쓰는 거임?"
 
     [이번 달 데이터]
-    - 수입: $${income}
-    - 지출: $${expense}
-    - 수입 대비 지출 비율: ${expenseRatio}%
+    - 수입: $${income} / 지출: $${expense} (비율 ${expenseRatio}%)
+    - 최대 지출 카테고리: ${topCategoryText}
+    - 소비 추세: ${trendText}
+    - 예산: ${budgetText}
 
     [이번 총평 각도] ${angle}
 
     [작성 조건]
-    1. 위의 각도로 3~4문장 내외로 짧고 굵게 작성할 것.
-    2. 수치($${income}, $${expense}, ${expenseRatio}%)를 자연스럽게 녹여낼 것.
+    1. 위의 각도로 6문장 내외로 짧고 굵게 작성할 것.
+    2. 데이터를 자연스럽게 녹여낼 것.
     3. 매번 다른 표현, 비유, 어투로 써서 반복감 없게 할 것.
   `;
 
