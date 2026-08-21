@@ -1,12 +1,11 @@
 import { Router } from "express";
 import { updateFcmToken, updateRoastLevel, deleteAccount } from "../controllers/userController";
-import { requireVerifiedUser } from "../middleware/auth";
 
 const router = Router();
 
+// requireVerifiedUser는 index.ts에서 이 라우터 전체에 이미 적용됨.
 router.patch("/fcm-token", updateFcmToken);
 router.patch("/roast-level", updateRoastLevel);
-// 계정 삭제는 되돌릴 수 없으므로 x-user-id fallback 없이 검증된 JWT만 허용.
-router.delete("/", requireVerifiedUser, deleteAccount);
+router.delete("/", deleteAccount);
 
 export default router;
