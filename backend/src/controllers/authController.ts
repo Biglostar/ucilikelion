@@ -19,6 +19,7 @@ export async function googleLogin(req: Request, res: Response) {
     const { sub: googleId, email, name } = payload;
 
     // 유저 찾기
+    // plaidAccessToken 등 내부 필드가 클라이언트로 새어나가지 않도록 필요한 필드만 select.
     const user = await prisma.user.upsert({
       where: { email },
       update: { googleId },
@@ -28,6 +29,7 @@ export async function googleLogin(req: Request, res: Response) {
         googleId,
         roastLevel: "MEDIUM",
       },
+      select: { id: true, email: true, nickname: true },
     });
 
     const token = signUserToken(user.id);
