@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Prisma, RoastLevel } from "@prisma/client";
 import { prisma } from "../prisma";
 import { plaidClient } from "../services/plaidService";
+import { decryptPlaidToken } from "../utils/tokenCrypto";
 
 export async function deleteAccount(req: Request, res: Response) {
   // requireVerifiedUser가 검증한 토큰의 userId만 여기 도달한다.
@@ -22,7 +23,7 @@ export async function deleteAccount(req: Request, res: Response) {
 
     if (user.plaidAccessToken) {
       try {
-        await plaidClient.itemRemove({ access_token: user.plaidAccessToken });
+        await plaidClient.itemRemove({ access_token: decryptPlaidToken(user.plaidAccessToken) });
       } catch (plaidError) {
         console.error("Plaid item removal failed during account deletion:", plaidError);
       }

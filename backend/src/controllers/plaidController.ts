@@ -8,6 +8,7 @@ import { updateUserBudgets, recalculateBudgets } from './dashboardController';
 import { determineStatus } from './transactionController';
 import { generateNaggingMessage } from '../services/aiService';
 import { TransactionType as PrismaTransactionType } from '@prisma/client';
+import { encryptPlaidToken, decryptPlaidToken } from '../utils/tokenCrypto';
 
 // Dev only
 import { Products as PlaidProducts } from 'plaid';
@@ -44,10 +45,10 @@ export const exchangePublicToken = async (req: Request, res: Response) => {
 
     const accessToken = response.data.access_token;
 
-    // Save the permanent key to the User table
+    // Save the permanent key to the User table (encrypted at rest)
     await prisma.user.update({
       where: { id: userId },
-      data: { plaidAccessToken: accessToken },
+      data: { plaidAccessToken: encryptPlaidToken(accessToken) },
     });
 
     res.json({ success: true, message: "Bank linked successfully!" });
@@ -70,11 +71,12 @@ export const syncTransactions = async (req: Request, res: Response) => {
     if (!user || !user.plaidAccessToken) {
       return res.status(400).json({ error: "Bank account not linked" });
     }
+    const accessToken = decryptPlaidToken(user.plaidAccessToken);
 
     // Production Plaid: refresh 먼저 요청 후 fetch
     console.log(`[Plaid Sync] Calling transactionsRefresh...`);
     try {
-      await plaidClient.transactionsRefresh({ access_token: user.plaidAccessToken });
+      await plaidClient.transactionsRefresh({ access_token: accessToken });
       console.log(`[Plaid Sync] transactionsRefresh done`);
     } catch (e) {
       const code = (e as any)?.response?.data?.error_code;
@@ -94,7 +96,7 @@ export const syncTransactions = async (req: Request, res: Response) => {
     const pageSize = 500;
     while (true) {
       const response = await plaidClient.transactionsGet({
-        access_token: user.plaidAccessToken,
+        access_token: accessToken,
         start_date: startDateStr,
         end_date: endDateStr,
         options: { count: pageSize, offset }
