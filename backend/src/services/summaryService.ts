@@ -78,7 +78,7 @@ cron.schedule('1 0 1 * *', async () => {
     try {
       await syncMonthlySummary(user.id, year, month);
 
-      const report = await generateMonthlyReport(user.id);
+      const report = await generateMonthlyReport(user.id, year, month);
 
       await prisma.report.create({
         data: {
