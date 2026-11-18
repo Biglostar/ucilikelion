@@ -120,7 +120,9 @@ export const syncTransactions = async (req: Request, res: Response) => {
       const txDate = new Date(pt.date + "T12:00:00");
 
       // 내부 이체(카드값 납부, 계좌 간 이체 등) 건너뛰기
-      if (plaidDetailedCategory?.startsWith('TRANSFER_') ||
+      // 단, Zelle은 Plaid가 TRANSFER_로 분류하지만 실제로는 타인과의 송금이므로 포함
+      const isZelle = /zelle/i.test(`${pt.merchant_name ?? ''} ${pt.name ?? ''}`);
+      if ((plaidDetailedCategory?.startsWith('TRANSFER_') && !isZelle) ||
           plaidDetailedCategory?.startsWith('LOAN_PAYMENTS_CREDIT_CARD') ||
           plaidDetailedCategory?.startsWith('BANK_FEES_')) {
         continue;
@@ -141,6 +143,15 @@ export const syncTransactions = async (req: Request, res: Response) => {
       });
       if (duplicate && duplicate.plaidTxnId !== pt.transaction_id) continue;
 
+      // 매핑 규칙이 바뀐 경우, 이전에 others로 저장된 거래를 새 카테고리로 보정
+      const mappedCategory = mapPlaidCategory(plaidDetailedCategory);
+      if (mappedCategory !== 'others') {
+        await prisma.transaction.updateMany({
+          where: { plaidTxnId: pt.transaction_id, category: 'others' },
+          data: { category: mappedCategory }
+        });
+      }
+
       const result = await prisma.transaction.upsert({
         where: { plaidTxnId: pt.transaction_id },
         update: {},
@@ -151,7 +162,7 @@ export const syncTransactions = async (req: Request, res: Response) => {
             title: pt.name || "Unknown",
             amountCents: amountCents,
             type: type,
-            category: mapPlaidCategory(plaidDetailedCategory),
+            category: mappedCategory,
             occurredAt: txDate,
           }
         });

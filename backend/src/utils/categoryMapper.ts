@@ -2,6 +2,10 @@ export const mapPlaidCategory = (detailedCategory?: string | null): string => {
     if (!detailedCategory) return 'others'; // default
     if (detailedCategory.startsWith('INCOME_')) return 'income';
     if (detailedCategory.startsWith('TRANSPORTATION_')) return 'transportation';
+    // 항공권·렌터카·기차 등은 Plaid에서 TRAVEL_로 분류됨 (숙박 TRAVEL_LODGING은 others 유지)
+    if (detailedCategory == 'TRAVEL_FLIGHTS' ||
+        detailedCategory == 'TRAVEL_RENTAL_CARS' ||
+        detailedCategory == 'TRAVEL_OTHER_TRAVEL') return 'transportation';
     if (detailedCategory.startsWith('GENERAL_MERCHANDISE_')) return 'general merchandise';
     if (detailedCategory.startsWith('PERSONAL_CARE_')) return 'personal care';
     if (detailedCategory.startsWith('ENTERTAINMENT_')) return 'entertainment';
