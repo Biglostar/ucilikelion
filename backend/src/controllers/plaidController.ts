@@ -5,8 +5,10 @@ import { CountryCode, Products } from 'plaid';
 import { TransactionType } from '@prisma/client';
 import { mapPlaidCategory } from '../utils/categoryMapper';
 import { updateUserBudgets, recalculateBudgets } from './dashboardController';
-import { determineStatus } from './transactionController';
-import { generateNaggingMessage } from '../services/aiService';
+import { generatePushNotification } from '../services/aiService';
+import { syncMonthlySummary } from '../services/summaryService';
+import { refreshCharacterState } from '../services/characterService';
+import { sendPushNotification } from '../services/pushService';
 import { TransactionType as PrismaTransactionType } from '@prisma/client';
 import { encryptPlaidToken, decryptPlaidToken } from '../utils/tokenCrypto';
 
@@ -119,8 +121,9 @@ export const syncTransactions = async (req: Request, res: Response) => {
       // Plaid returns date-only strings - use noon to avoid timezone shifts
       const txDate = new Date(pt.date + "T12:00:00");
 
-      // 내부 이체(카드값 납부, 계좌 간 이체 등) 건너뛰기
-      if (plaidDetailedCategory?.startsWith('TRANSFER_') ||
+      // 내부 이체(카드값 납부, 송금 등 나가는 이체) 건너뛰기
+      // 들어오는 이체(TRANSFER_IN: Venmo/Zelle로 친구가 보낸 돈 등)는 수입으로 기록
+      if (plaidDetailedCategory?.startsWith('TRANSFER_OUT') ||
           plaidDetailedCategory?.startsWith('LOAN_PAYMENTS_CREDIT_CARD') ||
           plaidDetailedCategory?.startsWith('BANK_FEES_')) {
         continue;
@@ -158,51 +161,32 @@ export const syncTransactions = async (req: Request, res: Response) => {
       if (result.plaidTxnId) addedCount++;
     }
 
-    // 실제 거래내역 기반으로 MonthlySummary 재계산
-    const allTxns = await prisma.transaction.findMany({ where: { userId } });
-    const summaryMap: Record<string, { spent: number; income: number }> = {};
-    for (const tx of allTxns) {
-      const d = new Date(tx.occurredAt);
-      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
-      if (!summaryMap[key]) summaryMap[key] = { spent: 0, income: 0 };
-      if (tx.type === PrismaTransactionType.EXPENSE) summaryMap[key].spent += tx.amountCents;
-      else summaryMap[key].income += tx.amountCents;
-    }
-    for (const [key, val] of Object.entries(summaryMap)) {
+    // 실제 거래내역 기반으로 MonthlySummary 재계산 (수동 입력 포함, 순지출 = 지출 − 환급)
+    const allTxns = await prisma.transaction.findMany({ where: { userId }, select: { occurredAt: true } });
+    const months = new Set(allTxns.map(t => `${t.occurredAt.getFullYear()}-${t.occurredAt.getMonth() + 1}`));
+    for (const key of months) {
       const [year, month] = key.split('-').map(Number);
-      await prisma.monthlySummary.upsert({
-        where: { userId_year_month: { userId, year, month } },
-        update: { totalSpentCents: val.spent, totalIncomeCents: val.income },
-        create: { userId, year, month, totalSpentCents: val.spent, totalIncomeCents: val.income },
-      });
+      await syncMonthlySummary(userId, year, month);
     }
 
-    await updateUserBudgets(userId);
+    const goalAlerts = await updateUserBudgets(userId);
     await recalculateBudgets(userId);
 
-    // 캐릭터 상태 업데이트
-    const updatedUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { totalMonthlyBudgetCents: true, roastLevel: true, characterStatus: true }
-    });
-
-    if (updatedUser && updatedUser.totalMonthlyBudgetCents > 0) {
-      const now2 = new Date();
-      const summary = await prisma.monthlySummary.findUnique({
-        where: { userId_year_month: { userId, year: now2.getFullYear(), month: now2.getMonth() + 1 } }
-      });
-      const totalSpent = summary?.totalSpentCents ?? 0;
-      const totalRemainingPct = ((updatedUser.totalMonthlyBudgetCents - totalSpent) / updatedUser.totalMonthlyBudgetCents) * 100;
-      const newStatus = determineStatus(totalRemainingPct);
-
-      if (newStatus !== updatedUser.characterStatus) {
-        const characterMsg = await generateNaggingMessage("monthly_progress", Math.floor(totalRemainingPct), updatedUser.roastLevel);
-        await prisma.user.update({
-          where: { id: userId },
-          data: { characterStatus: newStatus, characterMessage: characterMsg }
-        });
+    // 동기화로 checkpoint를 지난 목표가 있으면 가장 심각한(남은 비율이 가장 낮은) 것 하나만 알림
+    if (goalAlerts.length > 0) {
+      const worst = goalAlerts.reduce((a, b) => (b.checkpoint < a.checkpoint ? b : a));
+      const pushUser = await prisma.user.findUnique({ where: { id: userId }, select: { fcmToken: true, roastLevel: true } });
+      if (pushUser?.fcmToken) {
+        const message = await generatePushNotification(worst.category, worst.checkpoint, pushUser.roastLevel);
+        sendPushNotification(pushUser.fcmToken, "지출!!", message)
+          .catch(e => console.error("Push failed:", e));
+      } else {
+        console.warn(`[Push] user ${userId}: fcmToken 없음 — 알림 스킵 (checkpoint ${worst.checkpoint})`);
       }
     }
+
+    // 캐릭터 상태 업데이트
+    await refreshCharacterState(userId);
 
     res.json({ success: true, added: addedCount });
   } catch (error) {

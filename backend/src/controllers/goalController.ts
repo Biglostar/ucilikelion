@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from "../prisma";
 import { generateAiBudgetAnalysis } from '../services/aiService';
-import { updateUserBudgets, rolloverStaleGoals, currentMonthRange } from './dashboardController';
+import { updateUserBudgets, rolloverStaleGoals, currentMonthRange, calcGoalSpentCents } from './dashboardController';
+import { evaluateCheckpoint, remainingPctOf } from '../services/goalService';
 import { TransactionType } from '@prisma/client';
 // import { generateAiBudgetAnalysis } from '../services/aiService';
 // import { TransactionType } from '@prisma/client';
@@ -106,27 +107,7 @@ export async function createGoal(req: Request, res: Response) {
     });
 
     // 목표 생성 후 이번 달 해당 카테고리 지출 즉시 계산 (n빵 등 수입은 차감)
-    const [spent, received] = await Promise.all([
-      prisma.transaction.aggregate({
-        _sum: { amountCents: true },
-        where: {
-          userId,
-          category,
-          type: TransactionType.EXPENSE,
-          occurredAt: { gte: startOfMonth, lte: endOfMonth }
-        }
-      }),
-      prisma.transaction.aggregate({
-        _sum: { amountCents: true },
-        where: {
-          userId,
-          category,
-          type: TransactionType.INCOME,
-          occurredAt: { gte: startOfMonth, lte: endOfMonth }
-        }
-      })
-    ]);
-    const currentSpent = Math.max(0, (spent._sum.amountCents || 0) - (received._sum.amountCents || 0));
+    const currentSpent = await calcGoalSpentCents(userId, category, startOfMonth, endOfMonth);
     if (currentSpent > 0) {
       await prisma.goal.update({
         where: { id: goal.id },
@@ -157,10 +138,24 @@ export async function modifyGoal(req: Request, res: Response) {
     // 2. Extract whatever fields the frontend sent in the body
     const { title, category, monthlyBudgetCents, icon, memo, budgetSource, status } = req.body;
 
+    // 카테고리나 예산이 바뀌면 지출/알림 상태를 새 기준으로 다시 계산
+    // (카테고리 변경 시 기존 카테고리 지출이 그대로 남아 있던 문제)
+    const categoryChanged = !!category && category !== existingGoal.category;
+    const newBudget = monthlyBudgetCents ? Number(monthlyBudgetCents) : existingGoal.monthlyBudgetCents;
+    const newSpent = categoryChanged
+      ? await calcGoalSpentCents(userId, category, existingGoal.startDate, existingGoal.endDate)
+      : existingGoal.currentSpentCents;
+    const { lastAlertPct } = evaluateCheckpoint(
+      categoryChanged ? 100 : existingGoal.lastAlertPct,
+      remainingPctOf(newSpent, newBudget)
+    );
+
     // 3. Update only the fields that were provided
     const updatedGoal = await prisma.goal.update({
       where: { id: goalId },
       data: {
+        currentSpentCents: newSpent,
+        lastAlertPct,
         ...(title && { title }),
         ...(category && { category }),
         ...(monthlyBudgetCents && { monthlyBudgetCents: Number(monthlyBudgetCents) }),

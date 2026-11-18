@@ -12,9 +12,13 @@ struct GoalDetailSheet: View {
     var onEdit: () -> Void
     @Environment(\.dismiss) private var dismiss
 
-    private var budget: Int { goal.monthlyBudgetCents ?? 0 }
+    /// 시트가 열린 뒤 서버에서 갱신된 값이 있으면 그것을 사용
+    private var liveGoal: Goal { goalsStore.goals.first(where: { $0.id == goal.id }) ?? goal }
+    private var budget: Int { liveGoal.monthlyBudgetCents ?? 0 }
     private var spent: Int {
-        guard let spentPct = goal.spentPct, budget > 0 else { return 0 }
+        if let cents = liveGoal.currentSpentCents { return cents }
+        // 예전 캐시 호환: 정수 %에서 역산 (1% 미만 지출은 0이 됨)
+        guard let spentPct = liveGoal.spentPct, budget > 0 else { return 0 }
         return Int(Double(budget) * spentPct / 100.0)
     }
     private var remaining: Int { max(0, budget - spent) }

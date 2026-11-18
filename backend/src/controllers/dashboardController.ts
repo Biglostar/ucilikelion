@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma";
 import { generateNaggingMessage } from "../services/aiService";
 import { TransactionType } from '@prisma/client';
+import { evaluateCheckpoint, remainingPctOf } from "../services/goalService";
 
 export async function getDashboardData(req: Request, res: Response) {
   try {
@@ -181,6 +182,21 @@ export const recalculateBudgets = async (userId: string) => {
   }
 };
 
+// 목표 기간 내 해당 카테고리 지출 (지출 − 같은 카테고리 수입(n빵 환급 등), 0 미만이면 0)
+export const calcGoalSpentCents = async (userId: string, category: string, start: Date, end: Date) => {
+  const [expense, income] = await Promise.all([
+    prisma.transaction.aggregate({
+      _sum: { amountCents: true },
+      where: { userId, category, type: TransactionType.EXPENSE, occurredAt: { gte: start, lte: end } }
+    }),
+    prisma.transaction.aggregate({
+      _sum: { amountCents: true },
+      where: { userId, category, type: TransactionType.INCOME, occurredAt: { gte: start, lte: end } }
+    })
+  ]);
+  return Math.max(0, (expense._sum.amountCents || 0) - (income._sum.amountCents || 0));
+};
+
 // 이번 달 기간. endDate는 말일 23:59:59.999 — 말일 낮에 찍힌 거래도 포함되도록
 export const currentMonthRange = () => {
   const now = new Date();
@@ -198,17 +214,7 @@ export const rolloverStaleGoals = async (userId: string) => {
   });
 
   for (const goal of staleGoals) {
-    const [expense, income] = await Promise.all([
-      prisma.transaction.aggregate({
-        _sum: { amountCents: true },
-        where: { userId, category: goal.category, type: TransactionType.EXPENSE, occurredAt: { gte: start, lte: end } }
-      }),
-      prisma.transaction.aggregate({
-        _sum: { amountCents: true },
-        where: { userId, category: goal.category, type: TransactionType.INCOME, occurredAt: { gte: start, lte: end } }
-      })
-    ]);
-    const totalSpent = Math.max(0, (expense._sum.amountCents || 0) - (income._sum.amountCents || 0));
+    const totalSpent = await calcGoalSpentCents(userId, goal.category, start, end);
 
     await prisma.goal.update({
       where: { id: goal.id },
@@ -226,6 +232,7 @@ export const rolloverStaleGoals = async (userId: string) => {
 
 // --- REUSABLE HELPER FUNCTION ---
 // This handles the math and database updates, without needing req/res!
+// 재계산 결과 새로 지나간 checkpoint(또는 예산 초과 상태에서 지출 증가)가 있는 목표 목록을 반환한다.
 export const updateUserBudgets = async (userId: string) => {
   await rolloverStaleGoals(userId);
 
@@ -233,27 +240,25 @@ export const updateUserBudgets = async (userId: string) => {
     where: { userId: userId, status: 'ACTIVE' }
   });
 
-  let updatedCount = 0;
+  const alerts: { category: string; checkpoint: number }[] = [];
 
   for (const goal of activeGoals) {
-    const expense = await prisma.transaction.aggregate({
-      _sum: { amountCents: true },
-      where: { userId, category: goal.category, type: TransactionType.EXPENSE, occurredAt: { gte: goal.startDate, lte: goal.endDate } }
-    });
-    const income = await prisma.transaction.aggregate({
-      _sum: { amountCents: true },
-      where: { userId, category: goal.category, type: TransactionType.INCOME, occurredAt: { gte: goal.startDate, lte: goal.endDate } }
-    });
+    const totalSpent = await calcGoalSpentCents(userId, goal.category, goal.startDate, goal.endDate);
 
-    const totalSpent = Math.max(0, (expense._sum.amountCents || 0) - (income._sum.amountCents || 0));
+    const { crossedCheckpoint, lastAlertPct } = evaluateCheckpoint(
+      goal.lastAlertPct,
+      remainingPctOf(totalSpent, goal.monthlyBudgetCents)
+    );
+    const overBudgetAgain = totalSpent > goal.monthlyBudgetCents && totalSpent > goal.currentSpentCents;
+    if (crossedCheckpoint !== null || overBudgetAgain) {
+      alerts.push({ category: goal.category, checkpoint: crossedCheckpoint ?? 0 });
+    }
 
     await prisma.goal.update({
       where: { id: goal.id },
-      data: { currentSpentCents: totalSpent }
+      data: { currentSpentCents: totalSpent, lastAlertPct }
     });
-
-    updatedCount++;
   }
-  
-  return updatedCount; // Just return the number of updated goals
+
+  return alerts;
 };

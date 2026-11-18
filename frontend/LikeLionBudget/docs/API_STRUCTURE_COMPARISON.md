@@ -173,6 +173,6 @@
 - **Dashboard**: `DashboardResponse` → `DashboardSummary`, `DashboardActiveGoal`, `DashboardCharacter`
 - **Goals**: `BackendGoal`, `CreateGoalRequest`
 - **Transactions**: `BackendTransaction`, `CreateTransactionRequest`
-- **Category**: 서버 문자열은 `BudgetCategory.init(fromServer:)`로 매핑 (income, cafe, groceries, util 등)
+- **Category**: 서버 문자열은 `BudgetCategory.init(fromServer:)`로 매핑 (서버는 `BudgetCategory.rawValue`와 같은 값으로 저장: income, cafe, grocery, utilities, generalMerchandise 등. 예전 값 groceries, util 등도 호환)
 
 이 문서는 앱과 백엔드 구조를 맞출 때, **어디를 고칠지** 결정하기 위한 기준으로 사용하면 됩니다.

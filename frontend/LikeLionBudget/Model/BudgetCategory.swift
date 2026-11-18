@@ -81,7 +81,7 @@ extension BudgetCategory {
             self = .food
         case "grocery", "groceries":
             self = .grocery
-        case "general merchandise":
+        case "general merchandise", "generalmerchandise":
             self = .generalMerchandise
         case "personal care", "personalcare":
             self = .personalCare
@@ -89,7 +89,7 @@ extension BudgetCategory {
             self = .medical
         case "entertainment", "subscription":
             self = .entertainment
-        case "general services":
+        case "general services", "generalservices":
             self = .generalServices
         default:
             self = .others
