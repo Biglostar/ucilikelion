@@ -173,13 +173,8 @@ final class TransactionStore: ObservableObject {
             _realTransactions = mapped.sorted { $0.date > $1.date }
             transactions = _realTransactions
         } catch {
+            // API 실패 시 가짜 거래로 폴백하면 디버깅이 혼란스러워짐 → 실제 상태(빈 목록) 유지
             print("⚠️ fetchTransactions API failed:", error)
-            #if DEBUG
-            if _realTransactions.isEmpty {
-                _realTransactions = MockData.realModeTransactionList()
-                transactions = _realTransactions
-            }
-            #endif
         }
     }
 

@@ -103,6 +103,8 @@ struct PlaidLinkView: SwiftUI.View {
                         #else
                         errorMessage = "서버에 연결할 수 없어요. 네트워크를 확인하거나 잠시 후 다시 시도해 주세요."
                         #endif
+                    case .authRequired:
+                        errorMessage = "로그인이 필요해요."
                     case .serverStatus(let code):
                         errorMessage = code == 401 ? "로그인이 필요해요." : "서버 오류예요. (\(code))"
                     case .decoding, .invalidURL:

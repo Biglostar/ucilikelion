@@ -276,6 +276,7 @@ struct HomeView: View {
                     if attempt < 3 {
                         try? await Task.sleep(nanoseconds: 1_000_000_000)
                     } else {
+                        print("⚠️ fetchDashboard failed:", error)
                         await MainActor.run { dashboard = nil }
                     }
                 }
@@ -441,21 +442,20 @@ private struct GoalRemainingLabel: View {
 
     var body: some View {
         if let goal = goals.first(where: { $0.id == selectedGoalID }) {
-            let budget = budgetCents(for: goal.category)
+            let budget = goal.monthlyBudgetCents ?? 0
             let spent = spentCentsThisMonth(for: goal.category)
             let remaining = max(budget - spent, 0)
             let over = max(spent - budget, 0)
             let isOver = over > 0
-            Text(isOver ? "\(usd(over)) 초과했어요" : "\(usd(remaining)) 남았어요")
+            // 예산 미설정(0)이면 가짜 "$0 남았어요" 대신 안내 문구
+            let text: String = budget == 0
+                ? "예산 미설정"
+                : (isOver ? "\(usd(over)) 초과했어요" : "\(usd(remaining)) 남았어요")
+            Text(text)
                 .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
                 .foregroundStyle(isOver ? Theme.minus : Theme.text)
                 .frame(maxWidth: .infinity, alignment: .center)
         }
-    }
-
-    /// 예산 (cents). Dashboard activeGoals 없을 때만 사용. 있으면 API(DashboardActiveGoal.budget) 사용.
-    private func budgetCents(for category: BudgetCategory) -> Int {
-        localBudgetCents(for: category)
     }
 
     /// 이번 달 해당 카테고리 지출 (cents). Dashboard 없을 때만 사용. 있으면 API(DashboardActiveGoal.spent) 사용.
@@ -600,7 +600,7 @@ private struct GoalProgressPage: View {
     @State private var animatedProgress: Double = 0
 
     var body: some View {
-        let budget = budgetCents(for: goal.category)
+        let budget = goal.monthlyBudgetCents ?? 0
         let spent = spentCentsThisMonth(for: goal.category)
         let target = (budget == 0) ? 0 : Double(spent) / Double(budget)
         let isOver = spent >= budget && budget > 0
@@ -632,10 +632,6 @@ private struct GoalProgressPage: View {
 
     // MARK: - Data (Dashboard 없을 때만 사용. 있으면 DashboardGoalProgressPage에서 API 값 사용)
 
-    private func budgetCents(for category: BudgetCategory) -> Int {
-        localBudgetCents(for: category)
-    }
-
     private func spentCentsThisMonth(for category: BudgetCategory) -> Int {
         localSpentCentsThisMonth(for: category, in: store)
     }
@@ -647,18 +643,6 @@ private struct GoalProgressPage: View {
 
 
 // MARK: - 로컬 목표 계산 헬퍼 (Dashboard 없을 때만 사용. 있으면 API 값 사용)
-
-/// 카테고리별 월 예산 (cents). 백엔드 연동 시 Goal.monthlyBudgetCents 로 교체.
-private func localBudgetCents(for category: BudgetCategory) -> Int {
-    switch category {
-    case .rent:       return 1800 * 100
-    case .utilities:  return 200 * 100
-    case .grocery:    return 400 * 100
-    case .cafe:       return 60 * 100
-    case .food:       return 250 * 100
-    default:          return 200 * 100
-    }
-}
 
 /// 이번 달 해당 카테고리 지출 합계 (cents).
 private func localSpentCentsThisMonth(for category: BudgetCategory, in store: TransactionStore) -> Int {
