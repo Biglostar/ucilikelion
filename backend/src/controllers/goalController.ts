@@ -161,6 +161,8 @@ export async function modifyGoal(req: Request, res: Response) {
         ...(monthlyBudgetCents && { monthlyBudgetCents: Number(monthlyBudgetCents) }),
         ...(icon && { icon }),
         ...(memo !== undefined && { memo }),
+        // 예산을 직접 수정하면 USER_SET으로 전환 — 안 그러면 Plaid 동기화 때 recalculateBudgets가 덮어씀
+        ...(monthlyBudgetCents && !budgetSource && { budgetSource: "USER_SET" }),
         ...(budgetSource && { budgetSource }),
         ...(status && { status })
       }

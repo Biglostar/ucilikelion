@@ -53,7 +53,8 @@ export async function getDashboardData(req: Request, res: Response) {
     // 3. 개별 목표 진행률 계산
     const activeGoals = goals.map(goal => {
       const remainingAmount = Math.max(0, goal.monthlyBudgetCents - goal.currentSpentCents);
-      const rawPct = (remainingAmount / goal.monthlyBudgetCents) * 100;
+      // 예산 0이면 0/0 = NaN → JSON에서 null로 직렬화되어 iOS 디코딩이 실패하므로 0으로 처리
+      const rawPct = goal.monthlyBudgetCents > 0 ? (remainingAmount / goal.monthlyBudgetCents) * 100 : 0;
       return {
         id: goal.id,
         title: goal.title,
@@ -75,7 +76,7 @@ export async function getDashboardData(req: Request, res: Response) {
       activeGoals,
       character: {
         status: user.characterStatus, 
-        bubbleText: user.characterMessage 
+        bubbleText: user.characterMessage ?? ""
       }
     });
 

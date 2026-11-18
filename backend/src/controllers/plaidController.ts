@@ -119,11 +119,14 @@ export const syncTransactions = async (req: Request, res: Response) => {
       const plaidDetailedCategory = pt.personal_finance_category?.detailed;
       const amountCents = Math.round(Math.abs(pt.amount) * 100);
       // Plaid returns date-only strings - use noon to avoid timezone shifts
-      const txDate = new Date(pt.date + "T12:00:00");
+      // date는 은행 반영일(주말 결제가 월·화요일로 찍힘)이므로 실제 결제일인 authorized_date 우선 사용
+      const postedDate = new Date(pt.date + "T12:00:00");
+      const txDate = new Date((pt.authorized_date ?? pt.date) + "T12:00:00");
 
-      // 내부 이체(카드값 납부, 송금 등 나가는 이체) 건너뛰기
-      // 들어오는 이체(TRANSFER_IN: Venmo/Zelle로 친구가 보낸 돈 등)는 수입으로 기록
-      if (plaidDetailedCategory?.startsWith('TRANSFER_OUT') ||
+      // 내부 이체(카드값 납부, 계좌 간 이체 등) 건너뛰기
+      // 단, Zelle은 Plaid가 TRANSFER_로 분류하지만 실제로는 타인과의 송금이므로 포함
+      const isZelle = /zelle/i.test(`${pt.merchant_name ?? ''} ${pt.name ?? ''}`);
+      if ((plaidDetailedCategory?.startsWith('TRANSFER_') && !isZelle) ||
           plaidDetailedCategory?.startsWith('LOAN_PAYMENTS_CREDIT_CARD') ||
           plaidDetailedCategory?.startsWith('BANK_FEES_')) {
         continue;
@@ -144,6 +147,23 @@ export const syncTransactions = async (req: Request, res: Response) => {
       });
       if (duplicate && duplicate.plaidTxnId !== pt.transaction_id) continue;
 
+      // 매핑 규칙이 바뀐 경우, 이전에 others로 저장된 거래를 새 카테고리로 보정
+      const mappedCategory = mapPlaidCategory(plaidDetailedCategory);
+      if (mappedCategory !== 'others') {
+        await prisma.transaction.updateMany({
+          where: { plaidTxnId: pt.transaction_id, category: 'others' },
+          data: { category: mappedCategory }
+        });
+      }
+
+      // 이전에 반영일(date)로 저장된 거래를 실제 결제일로 보정 (사용자가 날짜를 직접 수정한 거래는 건드리지 않음)
+      if (txDate.getTime() !== postedDate.getTime()) {
+        await prisma.transaction.updateMany({
+          where: { plaidTxnId: pt.transaction_id, occurredAt: postedDate },
+          data: { occurredAt: txDate }
+        });
+      }
+
       const result = await prisma.transaction.upsert({
         where: { plaidTxnId: pt.transaction_id },
         update: {},
@@ -154,7 +174,7 @@ export const syncTransactions = async (req: Request, res: Response) => {
             title: pt.name || "Unknown",
             amountCents: amountCents,
             type: type,
-            category: mapPlaidCategory(plaidDetailedCategory),
+            category: mappedCategory,
             occurredAt: txDate,
           }
         });
