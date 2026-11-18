@@ -117,7 +117,9 @@ export const syncTransactions = async (req: Request, res: Response) => {
       const plaidDetailedCategory = pt.personal_finance_category?.detailed;
       const amountCents = Math.round(Math.abs(pt.amount) * 100);
       // Plaid returns date-only strings - use noon to avoid timezone shifts
-      const txDate = new Date(pt.date + "T12:00:00");
+      // date는 은행 반영일(주말 결제가 월·화요일로 찍힘)이므로 실제 결제일인 authorized_date 우선 사용
+      const postedDate = new Date(pt.date + "T12:00:00");
+      const txDate = new Date((pt.authorized_date ?? pt.date) + "T12:00:00");
 
       // 내부 이체(카드값 납부, 계좌 간 이체 등) 건너뛰기
       // 단, Zelle은 Plaid가 TRANSFER_로 분류하지만 실제로는 타인과의 송금이므로 포함
@@ -149,6 +151,14 @@ export const syncTransactions = async (req: Request, res: Response) => {
         await prisma.transaction.updateMany({
           where: { plaidTxnId: pt.transaction_id, category: 'others' },
           data: { category: mappedCategory }
+        });
+      }
+
+      // 이전에 반영일(date)로 저장된 거래를 실제 결제일로 보정 (사용자가 날짜를 직접 수정한 거래는 건드리지 않음)
+      if (txDate.getTime() !== postedDate.getTime()) {
+        await prisma.transaction.updateMany({
+          where: { plaidTxnId: pt.transaction_id, occurredAt: postedDate },
+          data: { occurredAt: txDate }
         });
       }
 
