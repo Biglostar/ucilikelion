@@ -297,11 +297,39 @@ struct APIClient {
         let remainingAmount: Int
         let remainingPct: Double
         let isOverBudget: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case id, title, category, budget, spent, remainingAmount, remainingPct, isOverBudget
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            title = try c.decode(String.self, forKey: .title)
+            category = try c.decode(String.self, forKey: .category)
+            budget = try c.decode(Int.self, forKey: .budget)
+            spent = try c.decode(Int.self, forKey: .spent)
+            remainingAmount = try c.decode(Int.self, forKey: .remainingAmount)
+            // 서버가 예산 0인 목표에 remainingPct: null을 보낼 수 있음 → 0으로 폴백해 홈 화면 전체 디코딩 실패 방지
+            remainingPct = try c.decodeIfPresent(Double.self, forKey: .remainingPct) ?? 0
+            isOverBudget = try c.decode(Bool.self, forKey: .isOverBudget)
+        }
     }
 
     struct DashboardCharacter: Codable {
         let status: String
         let bubbleText: String
+
+        enum CodingKeys: String, CodingKey {
+            case status, bubbleText
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            status = try c.decodeIfPresent(String.self, forKey: .status) ?? ""
+            // characterMessage가 null이어도 빈 문자열로 폴백
+            bubbleText = try c.decodeIfPresent(String.self, forKey: .bubbleText) ?? ""
+        }
     }
 
     // MARK: - Core request
