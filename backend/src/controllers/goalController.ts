@@ -59,6 +59,7 @@ export async function createGoal(req: Request, res: Response) {
   try {
     const userId = req.header("x-user-id") as string;
     let { title, category, monthlyBudgetCents, icon, memo, budgetSource, status } = req.body;
+    budgetSource = budgetSource || "USER_SET";
 
     if (budgetSource === "AUTO_AVG_3M") {
       const now = new Date();
@@ -82,9 +83,14 @@ export async function createGoal(req: Request, res: Response) {
         monthTotals[key] = (monthTotals[key] || 0) + tx.amountCents;
       }
       const values = Object.values(monthTotals).filter(v => v > 0);
-      monthlyBudgetCents = values.length > 0
-        ? Math.floor(values.reduce((a, b) => a + b, 0) / values.length)
-        : monthlyBudgetCents || 0; // 데이터 없으면 프론트에서 전달한 값 사용, 없으면 0
+      if (values.length > 0) {
+        monthlyBudgetCents = Math.floor(values.reduce((a, b) => a + b, 0) / values.length);
+      } else {
+        // 최근 3개월 지출이 없으면 프론트에서 전달한 값 사용, 없으면 0 (이후 사용자가 직접 설정)
+        monthlyBudgetCents = Number(monthlyBudgetCents) || 0;
+        // 사용자가 정한 예산은 Plaid 동기화 때 recalculateBudgets가 덮어쓰지 않도록 USER_SET으로 저장
+        if (monthlyBudgetCents > 0) budgetSource = "USER_SET";
+      }
     }
 
     const { start: startOfMonth, end: endOfMonth } = currentMonthRange();
@@ -98,7 +104,7 @@ export async function createGoal(req: Request, res: Response) {
         baselineAvg3mCents: budgetSource === "AUTO_AVG_3M" ? Number(monthlyBudgetCents) : null,
         icon: icon || "💰",
         memo: memo?.trim() || `${title} 목표 추가됨`,
-        budgetSource: budgetSource || "USER_SET",
+        budgetSource,
         status: status || "ACTIVE", 
         startDate: startOfMonth,
         endDate: endOfMonth,
@@ -157,6 +163,17 @@ export async function modifyGoal(req: Request, res: Response) {
     // 2. Extract whatever fields the frontend sent in the body
     const { title, category, monthlyBudgetCents, icon, memo, budgetSource, status } = req.body;
 
+    // 예산은 아직 0원(최근 3개월 지출 없음)인 목표에만 직접 설정 가능
+    if (monthlyBudgetCents !== undefined && monthlyBudgetCents !== null) {
+      const budget = Number(monthlyBudgetCents);
+      if (!Number.isInteger(budget) || budget <= 0) {
+        return res.status(400).json({ error: "monthlyBudgetCents must be a positive integer" });
+      }
+      if (existingGoal.monthlyBudgetCents > 0) {
+        return res.status(409).json({ error: "Budget can only be set when it is $0" });
+      }
+    }
+
     // 3. Update only the fields that were provided
     const updatedGoal = await prisma.goal.update({
       where: { id: goalId },
@@ -166,9 +183,9 @@ export async function modifyGoal(req: Request, res: Response) {
         ...(monthlyBudgetCents && { monthlyBudgetCents: Number(monthlyBudgetCents) }),
         ...(icon && { icon }),
         ...(memo !== undefined && { memo }),
-        // 예산을 직접 수정하면 USER_SET으로 전환 — 안 그러면 Plaid 동기화 때 recalculateBudgets가 덮어씀
-        ...(monthlyBudgetCents && !budgetSource && { budgetSource: "USER_SET" }),
         ...(budgetSource && { budgetSource }),
+        // 예산을 직접 설정하면 USER_SET으로 전환 — 안 그러면 Plaid 동기화 때 recalculateBudgets가 덮어씀
+        ...(monthlyBudgetCents && { budgetSource: "USER_SET", baselineAvg3mCents: null }),
         ...(status && { status })
       }
     });
