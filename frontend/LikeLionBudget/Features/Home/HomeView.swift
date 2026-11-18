@@ -23,6 +23,7 @@ struct HomeView: View {
     @State private var selectedDayForSheet: SelectedDay? = nil
     @State private var dashboard: APIClient.DashboardResponse? = nil
     @State private var selectedDashboardGoalIndex: Int = 0
+    @State private var budgetSheetGoal: Goal? = nil
 
     private var effectiveCharacterLevel: Int {
         if let d = dashboard {
@@ -84,6 +85,12 @@ struct HomeView: View {
                 .presentationBackground(.white)
                 .presentationCornerRadius(Theme.sheetCornerRadius)
         }
+        // 예산 미설정(0) 목표를 탭하면 예산 입력 시트
+        .sheet(item: $budgetSheetGoal) { g in
+            SetBudgetSheet(goal: g, goalsStore: goalsStore)
+                .presentationDetents([.height(300)])
+                .presentationCornerRadius(Theme.sheetCornerRadius)
+        }
         // 튜토리얼: dayDetail 단계 → DayDetailSheet 자동 오픈
         .onChange(of: tutorialStore.shouldOpenDayDetail) { _, should in
             guard should else { return }
@@ -113,7 +120,12 @@ struct HomeView: View {
                             selectedIndex: $selectedDashboardGoalIndex
                         )
                         DashboardGoalRemainingLabel(
-                            goal: d.activeGoals[selectedDashboardGoalIndex]
+                            goal: d.activeGoals[selectedDashboardGoalIndex],
+                            onSetBudget: { backendId in
+                                if let g = goalsStore.goals.first(where: { $0.backendId == backendId }) {
+                                    budgetSheetGoal = g
+                                }
+                            }
                         )
                     } else {
                         GoalProgressPagerView(
@@ -125,7 +137,8 @@ struct HomeView: View {
                         GoalRemainingLabel(
                             goals: goalsStore.selectedGoals,
                             selectedGoalID: selectedGoalID,
-                            store: store
+                            store: store,
+                            onSetBudget: { budgetSheetGoal = $0 }
                         )
                     }
                 }
@@ -439,6 +452,7 @@ private struct GoalRemainingLabel: View {
     let goals: [Goal]
     let selectedGoalID: UUID?
     @ObservedObject var store: TransactionStore
+    var onSetBudget: (Goal) -> Void = { _ in }
 
     var body: some View {
         if let goal = goals.first(where: { $0.id == selectedGoalID }) {
@@ -447,14 +461,21 @@ private struct GoalRemainingLabel: View {
             let remaining = max(budget - spent, 0)
             let over = max(spent - budget, 0)
             let isOver = over > 0
-            // 예산 미설정(0)이면 가짜 "$0 남았어요" 대신 안내 문구
-            let text: String = budget == 0
-                ? "예산 미설정"
-                : (isOver ? "\(usd(over)) 초과했어요" : "\(usd(remaining)) 남았어요")
-            Text(text)
-                .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
-                .foregroundStyle(isOver ? Theme.minus : Theme.text)
-                .frame(maxWidth: .infinity, alignment: .center)
+            if budget == 0 {
+                // 예산 미설정 — 가짜 "$0 남았어요" 대신 설정 유도 (탭 가능)
+                Button { onSetBudget(goal) } label: {
+                    Text("예산을 설정해 주세요")
+                        .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
+                        .foregroundStyle(Theme.rose)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(isOver ? "\(usd(over)) 초과했어요" : "\(usd(remaining)) 남았어요")
+                    .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
+                    .foregroundStyle(isOver ? Theme.minus : Theme.text)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
         }
     }
 
@@ -573,15 +594,27 @@ private struct DashboardGoalProgressPage: View {
 
 private struct DashboardGoalRemainingLabel: View {
     let goal: APIClient.DashboardActiveGoal
+    var onSetBudget: (String) -> Void = { _ in }
 
     var body: some View {
-        let amount = goal.remainingAmount
-        let isOver = goal.isOverBudget
-        let text = isOver ? "\(usd(amount)) 초과했어요" : "\(usd(amount)) 남았어요"
-        Text(text)
-            .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
-            .foregroundStyle(isOver ? Theme.minus : Theme.text)
-            .frame(maxWidth: .infinity, alignment: .center)
+        if goal.budget == 0 {
+            // 예산 미설정 — 탭하면 예산 입력 시트
+            Button { onSetBudget(goal.id) } label: {
+                Text("예산을 설정해 주세요")
+                    .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
+                    .foregroundStyle(Theme.rose)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .buttonStyle(.plain)
+        } else {
+            let amount = goal.remainingAmount
+            let isOver = goal.isOverBudget
+            let text = isOver ? "\(usd(amount)) 초과했어요" : "\(usd(amount)) 남았어요"
+            Text(text)
+                .font(.custom(Theme.fontLaundry, size: Theme.sectionTitleSize))
+                .foregroundStyle(isOver ? Theme.minus : Theme.text)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
     }
 
     private func usd(_ cents: Int) -> String {

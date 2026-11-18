@@ -24,6 +24,7 @@ struct GoalsListView: View {
     @State private var showAdd: Bool = false
     @State private var goalToEdit: GoalSheetItem? = nil
     @State private var goalToView: GoalSheetItem? = nil
+    @State private var budgetPromptGoal: GoalSheetItem? = nil
 
     var body: some View {
         ZStack {
@@ -108,6 +109,17 @@ struct GoalsListView: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(Theme.sheetCornerRadius)
                 }
+                // 목표 생성 직후 예산이 0원이면 바로 예산 입력 시트를 띄움
+                .sheet(item: $budgetPromptGoal) { item in
+                    SetBudgetSheet(goal: item.goal, goalsStore: goalsStore)
+                        .presentationDetents([.height(300)])
+                        .presentationCornerRadius(Theme.sheetCornerRadius)
+                }
+                .onChange(of: goalsStore.pendingBudgetPromptGoalID) { _, newID in
+                    guard let newID, let goal = goalsStore.goal(by: newID) else { return }
+                    budgetPromptGoal = GoalSheetItem(goal: goal)
+                    goalsStore.pendingBudgetPromptGoalID = nil
+                }
             }
 
         }
@@ -139,6 +151,12 @@ struct GoalsListView: View {
                                 .font(.custom(Theme.fontLaundry, size: 12))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(Theme.progressFill)
+                        } else if goal.wrappedValue.monthlyBudgetCents == 0 {
+                            // 예산이 0원 — 탭하면 상세에서 설정 가능
+                            Text("예산 설정 필요")
+                                .font(.custom(Theme.fontLaundry, size: 12))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Theme.rose)
                         } else {
                             Text(goal.wrappedValue.category.displayNameKR)
                                 .font(.custom(Theme.fontLaundry, size: 12))
