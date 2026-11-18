@@ -1,38 +1,15 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma";
-import { generateNaggingMessage, generatePushNotification } from "../services/aiService";
-import { updateMonthlySummary } from "../services/summaryService";
+import { generatePushNotification } from "../services/aiService";
+import { syncMonthlySummary } from "../services/summaryService";
+import { refreshCharacterState } from "../services/characterService";
 import { sendPushNotification } from "../services/pushService";
-/**
- * 전체 잔여 예산 비율에 따라 캐릭터의 경제적 상태를 결정합니다.
- * @param totalRemainingPct 전체 예산 대비 남은 금액 비율 (0 ~ 100)
- * @returns "RICH" | "STABLE" | "SURVIVING" | "DESPERATE" | "BROKE"
- */
-export function determineStatus(totalRemainingPct: number): "RICH" | "STABLE" | "SURVIVING" | "DESPERATE" | "BROKE" {
-  if (totalRemainingPct > 75) {
-    return "RICH";
-  } else if (totalRemainingPct > 50) {
-    return "STABLE";
-  } else if (totalRemainingPct > 25) {
-    return "SURVIVING";
-  } else if (totalRemainingPct > 0) {
-    return "DESPERATE";
-  } else {
-    return "BROKE";
-  }
-}
+import { evaluateCheckpoint, remainingPctOf } from "../services/goalService";
+import { rolloverStaleGoals } from "./dashboardController";
 
 // 목표 기간(해당 월) 밖의 거래는 게이지에 반영하지 않음
 function isWithinGoalPeriod(goal: { startDate: Date; endDate: Date }, date: Date) {
   return date >= goal.startDate && date <= goal.endDate;
-}
-
-function getNaggingCheckpoint(lastAlertPct: number, remainingPct: number) {
-  const checkpoints = [100, 75, 50, 25, 10, 0];
-  const crossed = checkpoints
-    .filter((cp) => remainingPct <= cp && lastAlertPct > cp)
-    .sort((a, b) => a - b)[0];
-  return crossed !== undefined ? crossed : null;
 }
 
 export async function getTransactions(req: Request, res: Response) {
@@ -87,115 +64,81 @@ export async function createTransaction(req: Request, res: Response) {
     const year = dateObj.getFullYear();
     const month = dateObj.getMonth() + 1;
 
+    // 달이 바뀐 뒤 대시보드를 열기 전에 들어온 지출도 이번 달 목표에 반영되도록 먼저 rollover
+    await rolloverStaleGoals(userId);
+
     const result = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ 
-      where: { id: userId },
-      select: { id: true, fcmToken: true, roastLevel: true, characterStatus: true, characterMessage: true, lastTotalAlertPct: true, totalMonthlyBudgetCents: true }
-    });
-    if (!user) throw new Error("User not found");
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, fcmToken: true, roastLevel: true }
+      });
+      if (!user) throw new Error("User not found");
 
       // 2. 지출 생성
-    const transaction = await tx.transaction.create({
+      const transaction = await tx.transaction.create({
         data: { userId, title, amountCents, type, category, occurredAt: dateObj, isFixed: isFixed ?? false, note },
-    });
+      });
 
-    if (type === "INCOME") {
-      await tx.monthlySummary.upsert({
-        where: { userId_year_month: { userId, year, month } },
-        update: { totalIncomeCents: { increment: amountCents } },
-        create: { userId, year, month, totalIncomeCents: amountCents },
-      });
-      // If this income belongs to a goal category (e.g. friends paying back their share),
-      // reduce the goal's spending so the gauge reflects the real net cost.
-      const offsetGoal = await tx.goal.findFirst({
-        where: { userId, category, status: "ACTIVE" },
-        orderBy: { isSelected: "desc" },
-      });
-      if (offsetGoal && isWithinGoalPeriod(offsetGoal, dateObj)) {
-        await tx.goal.update({
-          where: { id: offsetGoal.id },
-          data: { currentSpentCents: Math.max(0, offsetGoal.currentSpentCents - amountCents) },
+      // 3. MonthlySummary 재계산 (순지출 = 지출 − 환급)
+      await syncMonthlySummary(userId, year, month, tx);
+
+      if (type === "INCOME") {
+        // If this income belongs to a goal category (e.g. friends paying back their share),
+        // reduce the goal's spending so the gauge reflects the real net cost.
+        const offsetGoal = await tx.goal.findFirst({
+          where: { userId, category, status: "ACTIVE" },
+          orderBy: { isSelected: "desc" },
         });
+        if (offsetGoal && isWithinGoalPeriod(offsetGoal, dateObj)) {
+          const newSpent = Math.max(0, offsetGoal.currentSpentCents - amountCents);
+          const { lastAlertPct } = evaluateCheckpoint(offsetGoal.lastAlertPct, remainingPctOf(newSpent, offsetGoal.monthlyBudgetCents));
+          await tx.goal.update({
+            where: { id: offsetGoal.id },
+            data: { currentSpentCents: newSpent, lastAlertPct },
+          });
+        }
+        return { transaction, goalAlert: null, user };
       }
-      return { transaction, alert: { shouldNotify: false } };
-    }
-
-      // 3. MonthlySummary 업데이트 (전체 지출 합산)
-    const summary = await tx.monthlySummary.upsert({
-        where: { userId_year_month: { userId, year, month } },
-        update: { totalSpentCents: { increment: amountCents } },
-        create: { userId, year, month, totalSpentCents: amountCents }
-      });
 
       // --- 카테고리: 푸시 알림 체크 ---
-    const goal = await tx.goal.findFirst({
-    where: { userId, category, status: "ACTIVE" },
-    orderBy: { isSelected: "desc" }
-  });
+      const goal = await tx.goal.findFirst({
+        where: { userId, category, status: "ACTIVE" },
+        orderBy: { isSelected: "desc" }
+      });
 
-  let naggingMessage = "";
-  let shouldNotifyPush = false;
+      let goalAlert: { checkpoint: number } | null = null;
 
-if (goal && isWithinGoalPeriod(goal, dateObj)) {
-  const newGoalSpent = goal.currentSpentCents + amountCents;
-  const goalRemainingPct = ((goal.monthlyBudgetCents - newGoalSpent) / goal.monthlyBudgetCents) * 100;
-  
-  // 1. 체크포인트 통과 여부 확인
-  const goalCheckpoint = getNaggingCheckpoint(goal.lastAlertPct, goalRemainingPct);
+      if (goal && isWithinGoalPeriod(goal, dateObj)) {
+        const newGoalSpent = goal.currentSpentCents + amountCents;
+        const { crossedCheckpoint, lastAlertPct } = evaluateCheckpoint(
+          goal.lastAlertPct,
+          remainingPctOf(newGoalSpent, goal.monthlyBudgetCents)
+        );
 
-  if (goalCheckpoint !== null || newGoalSpent > goal.monthlyBudgetCents) {
-    shouldNotifyPush = true;
-    // AI 서비스 호출하여 메시지 생성
-    naggingMessage = await generatePushNotification(category, goalCheckpoint ?? 0, user.roastLevel);
-  }
+        // checkpoint를 지났거나, 예산 초과 상태에서 또 지출하면 매번 알림
+        if (crossedCheckpoint !== null || newGoalSpent > goal.monthlyBudgetCents) {
+          goalAlert = { checkpoint: crossedCheckpoint ?? 0 };
+        }
 
-  // 2. 알림 여부와 상관없이 지출액은 무조건 업데이트
-  await tx.goal.update({
-    where: { id: goal.id },
-    data: { 
-      currentSpentCents: newGoalSpent, 
-      // 알림이 발생했을 때만 체크포인트 기록, 아니면 기존 값 유지
-      lastAlertPct: goalCheckpoint !== null ? goalCheckpoint : goal.lastAlertPct
-    }
-  });
-}
-
-      // --- 전체 월: 캐릭터 상태 업데이트 ---
-    const totalBudget = user.totalMonthlyBudgetCents;
-    const totalSpent = summary.totalSpentCents;
-    const totalRemainingPct = ((totalBudget - totalSpent) / totalBudget) * 100;
-    console.log("Total Spent:", totalSpent, "Remaining %:", totalRemainingPct);
-const totalCheckpoint = getNaggingCheckpoint(user.lastTotalAlertPct!, totalRemainingPct);      
-    const newStatus = determineStatus(totalRemainingPct);
-  console.log("New Calculated Status:", newStatus);
-    if (newStatus !== user.characterStatus || totalCheckpoint !== null) {
-        const characterMsg = await generateNaggingMessage("monthly_progress", totalCheckpoint ?? Math.floor(totalRemainingPct), user.roastLevel);
-        
-        await tx.user.update({
-          where: { id: userId },
-          data: {
-            characterStatus: newStatus,
-            characterMessage: characterMsg,
-            lastTotalAlertPct: totalCheckpoint !== null ? totalCheckpoint : user.lastTotalAlertPct                                            
-          }
+        await tx.goal.update({
+          where: { id: goal.id },
+          data: { currentSpentCents: newGoalSpent, lastAlertPct }
         });
       }
 
-      return { 
-        transaction, 
-        alert: { 
-          shouldNotify: shouldNotifyPush, 
-          message: naggingMessage, 
-          characterStatus: newStatus 
-        },
-        fcmToken: user.fcmToken 
-      };
+      return { transaction, goalAlert, user };
     }, { timeout: 20000 });
 
-    // 4. 푸시 발송
-    if (result.alert.shouldNotify && result.fcmToken) {
-      sendPushNotification(result.fcmToken, "지출!!", result.alert.message)
+    // 4. 캐릭터/말풍선 갱신 — AI 호출은 DB 트랜잭션 밖에서 (응답 지연으로 거래 저장이 롤백되지 않도록)
+    await refreshCharacterState(userId);
+
+    // 5. 푸시 발송
+    if (result.goalAlert && result.user.fcmToken) {
+      const message = await generatePushNotification(category, result.goalAlert.checkpoint, result.user.roastLevel);
+      sendPushNotification(result.user.fcmToken, "지출!!", message)
         .catch(e => console.error("Push failed:", e));
+    } else if (result.goalAlert) {
+      console.warn(`[Push] user ${userId}: fcmToken 없음 — 알림 스킵 (checkpoint ${result.goalAlert.checkpoint})`);
     }
 
     return res.status(201).json(result.transaction);
@@ -222,30 +165,6 @@ export async function updateTransaction(req: Request, res: Response) {
       const newType = type ?? existing.type;
       const newCategory = category ?? existing.category;
 
-      // MonthlySummary: decre old and update new
-      const oldYear = existing.occurredAt.getFullYear();
-      const oldMonth = existing.occurredAt.getMonth() + 1;
-      await tx.monthlySummary.upsert({
-        where: { userId_year_month: { userId, year: oldYear, month: oldMonth } },
-        update: existing.type === "EXPENSE"
-          ? { totalSpentCents: { decrement: existing.amountCents } }
-          : { totalIncomeCents: { decrement: existing.amountCents } },
-        create: { userId, year: oldYear, month: oldMonth },
-      });
-      const newYear = newOccurredAt.getFullYear();
-      const newMonth = newOccurredAt.getMonth() + 1;
-      await tx.monthlySummary.upsert({
-        where: { userId_year_month: { userId, year: newYear, month: newMonth } },
-        update: newType === "EXPENSE"
-          ? { totalSpentCents: { increment: newAmountCents } }
-          : { totalIncomeCents: { increment: newAmountCents } },
-        create: {
-          userId, year: newYear, month: newMonth,
-          totalSpentCents: newType === "EXPENSE" ? newAmountCents : 0,
-          totalIncomeCents: newType === "INCOME" ? newAmountCents : 0,
-        },
-      });
-
       // Goal: undo the effect of the old transaction, then apply the new one
       const oldGoal = await tx.goal.findFirst({
         where: { userId, category: existing.category, status: "ACTIVE" },
@@ -255,22 +174,34 @@ export async function updateTransaction(req: Request, res: Response) {
         const revert = existing.type === "EXPENSE"
           ? Math.max(0, oldGoal.currentSpentCents - existing.amountCents)   // undo expense
           : oldGoal.currentSpentCents + existing.amountCents;               // undo income offset
-        await tx.goal.update({ where: { id: oldGoal.id }, data: { currentSpentCents: revert } });
+        const { lastAlertPct } = evaluateCheckpoint(oldGoal.lastAlertPct, remainingPctOf(revert, oldGoal.monthlyBudgetCents));
+        await tx.goal.update({ where: { id: oldGoal.id }, data: { currentSpentCents: revert, lastAlertPct } });
       }
 
       const newGoal = await tx.goal.findFirst({
         where: { userId, category: newCategory, status: "ACTIVE" },
         orderBy: { isSelected: "desc" },
       });
+      let goalAlert: { category: string; checkpoint: number } | null = null;
       if (newGoal && isWithinGoalPeriod(newGoal, newOccurredAt)) {
         const fresh = await tx.goal.findUnique({ where: { id: newGoal.id } });
         const apply = newType === "EXPENSE"
           ? fresh!.currentSpentCents + newAmountCents                        // add expense
           : Math.max(0, fresh!.currentSpentCents - newAmountCents);          // apply income offset
-        await tx.goal.update({ where: { id: newGoal.id }, data: { currentSpentCents: apply } });
+        const { crossedCheckpoint, lastAlertPct } = evaluateCheckpoint(
+          fresh!.lastAlertPct,
+          remainingPctOf(apply, fresh!.monthlyBudgetCents)
+        );
+        // 수정 결과 원래보다 지출이 늘어난 경우에만 알림 (createTransaction과 동일한 기준)
+        const spentBefore = oldGoal?.id === newGoal.id ? oldGoal.currentSpentCents : newGoal.currentSpentCents;
+        const spentIncreased = apply > spentBefore;
+        if (spentIncreased && (crossedCheckpoint !== null || apply > fresh!.monthlyBudgetCents)) {
+          goalAlert = { category: newCategory, checkpoint: crossedCheckpoint ?? 0 };
+        }
+        await tx.goal.update({ where: { id: newGoal.id }, data: { currentSpentCents: apply, lastAlertPct } });
       }
 
-      return tx.transaction.update({
+      const transaction = await tx.transaction.update({
         where: { id },
         data: {
           ...(title !== undefined && { title }),
@@ -282,9 +213,30 @@ export async function updateTransaction(req: Request, res: Response) {
           ...(note !== undefined && { note }),
         },
       });
+
+      // MonthlySummary: 이전 월과 새 월 모두 재계산
+      await syncMonthlySummary(userId, existing.occurredAt.getFullYear(), existing.occurredAt.getMonth() + 1, tx);
+      if (newOccurredAt.getFullYear() !== existing.occurredAt.getFullYear() || newOccurredAt.getMonth() !== existing.occurredAt.getMonth()) {
+        await syncMonthlySummary(userId, newOccurredAt.getFullYear(), newOccurredAt.getMonth() + 1, tx);
+      }
+
+      return { transaction, goalAlert };
     }, { timeout: 20000 });
 
-    return res.status(200).json(updated);
+    await refreshCharacterState(userId);
+
+    if (updated.goalAlert) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { fcmToken: true, roastLevel: true } });
+      if (user?.fcmToken) {
+        const message = await generatePushNotification(updated.goalAlert.category, updated.goalAlert.checkpoint, user.roastLevel);
+        sendPushNotification(user.fcmToken, "지출!!", message)
+          .catch(e => console.error("Push failed:", e));
+      } else {
+        console.warn(`[Push] user ${userId}: fcmToken 없음 — 알림 스킵 (checkpoint ${updated.goalAlert.checkpoint})`);
+      }
+    }
+
+    return res.status(200).json(updated.transaction);
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Failed to update transaction" });
@@ -305,12 +257,7 @@ export async function deleteTransaction(req: Request, res: Response) {
 
       await tx.transaction.delete({ where: { id } });
 
-      await updateMonthlySummary(
-        existing.userId,
-        existing.occurredAt,
-        -existing.amountCents,
-        existing.type as "EXPENSE" | "INCOME"
-      );
+      await syncMonthlySummary(userId, existing.occurredAt.getFullYear(), existing.occurredAt.getMonth() + 1, tx);
 
       // Keep goal gauge accurate: undo expense or reverse income offset
       const goal = await tx.goal.findFirst({
@@ -321,12 +268,15 @@ export async function deleteTransaction(req: Request, res: Response) {
         const updated = existing.type === "EXPENSE"
           ? Math.max(0, goal.currentSpentCents - existing.amountCents)
           : goal.currentSpentCents + existing.amountCents;
+        const { lastAlertPct } = evaluateCheckpoint(goal.lastAlertPct, remainingPctOf(updated, goal.monthlyBudgetCents));
         await tx.goal.update({
           where: { id: goal.id },
-          data: { currentSpentCents: updated },
+          data: { currentSpentCents: updated, lastAlertPct },
         });
       }
     }, { timeout: 20000 });
+
+    await refreshCharacterState(userId);
 
     return res.status(200).json({ message: "Deleted successfully" });
   } catch (e: any) {

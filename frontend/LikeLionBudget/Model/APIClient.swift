@@ -178,6 +178,8 @@ struct APIClient {
         let spentPct: Double
         let remainingPct: Double
         let overBudget: Bool
+        /// 서버가 계산한 이번 달 해당 카테고리 지출 (지출 − 환급)
+        let currentSpentCents: Int?
 
         private enum CodingKeys: String, CodingKey {
             case id, title, memo, icon, category
@@ -192,6 +194,7 @@ struct APIClient {
             case percentage = "percentage"
             case overBudget
             case current_spent = "current_spent"
+            case currentSpentCents
         }
 
         init(
@@ -205,7 +208,8 @@ struct APIClient {
             endDate: String?,
             spentPct: Double,
             remainingPct: Double,
-            overBudget: Bool
+            overBudget: Bool,
+            currentSpentCents: Int? = nil
         ) {
             self.id = id
             self.title = title
@@ -218,6 +222,7 @@ struct APIClient {
             self.spentPct = spentPct
             self.remainingPct = remainingPct
             self.overBudget = overBudget
+            self.currentSpentCents = currentSpentCents
         }
 
         /// JSON에서 70(정수) 또는 70.0(실수) 둘 다 받기 위함
@@ -252,6 +257,7 @@ struct APIClient {
             remainingPct = Self.decodeDouble(from: c, forKey: .remainingPct) ?? Self.decodeDouble(from: c, forKey: .percentage) ?? 0
             spentPct = Self.decodeDouble(from: c, forKey: .spentPct) ?? 0
             overBudget = try c.decodeIfPresent(Bool.self, forKey: .overBudget) ?? false
+            currentSpentCents = Self.decodeDouble(from: c, forKey: .currentSpentCents).map { Int($0) }
         }
 
         func encode(to encoder: Encoder) throws {
@@ -267,6 +273,7 @@ struct APIClient {
             try c.encode(spentPct, forKey: .spentPct)
             try c.encode(remainingPct, forKey: .remainingPct)
             try c.encode(overBudget, forKey: .overBudget)
+            try c.encodeIfPresent(currentSpentCents, forKey: .currentSpentCents)
         }
     }
 

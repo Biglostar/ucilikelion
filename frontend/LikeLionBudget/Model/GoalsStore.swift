@@ -78,6 +78,13 @@ final class GoalsStore: ObservableObject {
         var enriched = goal
         enriched.backendId = existingBackendId
         if enriched.monthlyBudgetCents == nil { enriched.monthlyBudgetCents = existingBudget }
+        // 편집기는 지출 정보 없이 Goal을 새로 만들기 때문에 기존 값을 유지 (안 그러면 지출이 0으로 보임)
+        if enriched.currentSpentCents == nil {
+            enriched.currentSpentCents = _realGoals[idx].currentSpentCents
+            enriched.spentPct = _realGoals[idx].spentPct
+            enriched.remainingPct = _realGoals[idx].remainingPct
+            enriched.overBudget = _realGoals[idx].overBudget
+        }
         _realGoals[idx] = enriched
         goals = _realGoals
         saveRealGoals()
@@ -92,6 +99,8 @@ final class GoalsStore: ObservableObject {
                     category: goal.category,
                     monthlyBudgetCents: nil
                 )
+                // 카테고리가 바뀌면 서버가 지출을 다시 계산하므로 최신 값으로 갱신
+                await loadRemoteGoals()
             } catch {
                 print("⚠️ updateGoal API failed:", error)
             }
@@ -165,6 +174,8 @@ final class GoalsStore: ObservableObject {
             let backendGoals = try await api.fetchGoals()
             let mapped: [Goal] = backendGoals.map { bg in
                 Goal(
+                    // 같은 서버 목표는 로컬 id를 유지 (열려 있는 상세 화면이 최신 값을 찾을 수 있도록)
+                    id: _realGoals.first(where: { $0.backendId == bg.id })?.id ?? UUID(),
                     title: bg.title,
                     type: .reduceSpending,
                     isSelected: true,
@@ -175,7 +186,8 @@ final class GoalsStore: ObservableObject {
                     monthlyBudgetCents: bg.monthlyBudgetCents,
                     spentPct: bg.spentPct,
                     remainingPct: bg.remainingPct,
-                    overBudget: bg.overBudget
+                    overBudget: bg.overBudget,
+                    currentSpentCents: bg.currentSpentCents
                 )
             }
             _realGoals = mapped
@@ -208,6 +220,8 @@ final class GoalsStore: ObservableObject {
                 goals = _realGoals
                 saveRealGoals()
             }
+            // 생성 직후 서버가 계산한 이번 달 지출/게이지 반영
+            await loadRemoteGoals()
         } catch {
             print("⚠️ createGoal API failed:", error)
         }

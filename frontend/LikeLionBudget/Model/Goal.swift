@@ -29,6 +29,7 @@ struct Goal: Identifiable, Codable, Equatable, Hashable {
     var spentPct: Double?
     var remainingPct: Double?
     var overBudget: Bool?
+    var currentSpentCents: Int?
 
     init(
         id: UUID = UUID(),
@@ -42,7 +43,8 @@ struct Goal: Identifiable, Codable, Equatable, Hashable {
         monthlyBudgetCents: Int? = nil,
         spentPct: Double? = nil,
         remainingPct: Double? = nil,
-        overBudget: Bool? = nil
+        overBudget: Bool? = nil,
+        currentSpentCents: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -56,5 +58,6 @@ struct Goal: Identifiable, Codable, Equatable, Hashable {
         self.spentPct = spentPct
         self.remainingPct = remainingPct
         self.overBudget = overBudget
+        self.currentSpentCents = currentSpentCents
     }
 }
