@@ -14,6 +14,9 @@ final class GoalsStore: ObservableObject {
 
     @Published private(set) var goals: [Goal] = []
 
+    /// 목표 생성 직후 예산이 0원이면, 예산 입력 시트를 띄우도록 뷰에 신호를 보냄
+    @Published var pendingBudgetPromptGoalID: UUID? = nil
+
     private var _realGoals: [Goal] = []
     private let api = APIClient()
     private let key = "LikeLionBudget.Goals.v1"
@@ -104,6 +107,29 @@ final class GoalsStore: ObservableObject {
             } catch {
                 print("⚠️ updateGoal API failed:", error)
             }
+        }
+    }
+
+    /// 예산이 0원인 목표에 사용자가 직접 예산을 설정. 성공 시 nil, 실패 시 사용자에게 보여줄 에러 메시지 반환.
+    func setBudget(goalId: UUID, cents: Int) async -> String? {
+        guard let backendId = _realGoals.first(where: { $0.id == goalId })?.backendId else {
+            return "목표를 찾을 수 없어요."
+        }
+        do {
+            try await api.updateGoal(id: backendId, title: nil, memo: nil, category: nil, monthlyBudgetCents: cents)
+            await loadRemoteGoals()
+            // 홈 대시보드도 갱신되도록 알림 (HomeView가 수신)
+            NotificationCenter.default.post(name: .transactionDidChange, object: nil)
+            return nil
+        } catch APIError.serverStatus(409) {
+            // 이미 예산이 설정된 목표 — 최신 상태로 리로드만 하고 성공 처리
+            await loadRemoteGoals()
+            return nil
+        } catch APIError.serverStatus(400) {
+            return "올바른 금액을 입력해 주세요."
+        } catch {
+            print("⚠️ setBudget API failed:", error)
+            return "예산 설정에 실패했어요. 잠시 후 다시 시도해 주세요."
         }
     }
 
@@ -222,6 +248,10 @@ final class GoalsStore: ObservableObject {
             }
             // 생성 직후 서버가 계산한 이번 달 지출/게이지 반영
             await loadRemoteGoals()
+            // 최근 3개월 지출이 없어 예산이 0원으로 잡히면, 사용자가 바로 예산을 설정하도록 프롬프트
+            if bg.monthlyBudgetCents == 0 {
+                pendingBudgetPromptGoalID = goal.id
+            }
         } catch {
             print("⚠️ createGoal API failed:", error)
         }
