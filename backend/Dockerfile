@@ -15,5 +15,11 @@ RUN npx prisma generate
 
 COPY . .
 
+# 4. TypeScript를 빌드 단계에서 컴파일 → 타입 에러가 있으면 여기서 빌드가 실패하고
+#    Railway는 직전 정상 배포를 그대로 유지한다 (깨진 코드가 프로덕션에 올라가지 않음).
+RUN npm run build
+
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run dev"]
+
+# 5. 컴파일된 결과를 프로덕션 모드로 실행 (ts-node-dev/nodemon 아님)
+CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]

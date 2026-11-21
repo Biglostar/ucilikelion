@@ -159,8 +159,6 @@ export async function modifyGoal(req: Request, res: Response) {
     const updatedGoal = await prisma.goal.update({
       where: { id: goalId },
       data: {
-        currentSpentCents: newSpent,
-        lastAlertPct,
         ...(title && { title }),
         ...(category && { category }),
         ...(monthlyBudgetCents && { monthlyBudgetCents: Number(monthlyBudgetCents) }),
